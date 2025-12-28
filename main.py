@@ -37,3 +37,33 @@ async def trigger_scan(background_tasks: BackgroundTasks):
 async def delete_company(company_id: int = Form(...)):
     database.delete_company(company_id)
     return RedirectResponse(url="/", status_code=303)
+
+@app.post("/add")
+async def add_company(request: Request, name: str = Form(...), url: str = Form(...)):
+    # 1. שליפת הרשימה הקיימת
+    current_companies = database.get_companies()
+    
+    # 2. בדיקת מגבלה (עד 5 חברות)
+    if len(current_companies) >= 5:
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "companies": current_companies,
+            "error_message": "✋ המערכת מוגבלת ל-5 חברות כרגע כדי לשמור על ביצועים."
+        })
+
+    # 3. ניסיון הוספה בטוח (Try-Except)
+    try:
+        # כאן אנחנו מנסים להוסיף. אם ה-URL לא תקין או הדאטה-בייס נעול - זה יקפוץ ל-except
+        database.add_company(name, url)
+        
+        # אם הצליח - חוזרים לדף הבית נקי
+        return RedirectResponse(url="/", status_code=303)
+        
+    except Exception as e:
+        # 4. במקרה של שגיאה - לא להקריס! להציג את השגיאה למשתמש
+        print(f"Error adding company: {e}") # בשביל הלוגים שלך
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "companies": current_companies,
+            "error_message": f"❌ אופס, משהו השתבש: {str(e)}"
+        })

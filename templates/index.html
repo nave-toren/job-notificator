@@ -16,6 +16,12 @@
             <p class="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Nave Toren Edition</p>
         </div>
 
+        {% if error_message %}
+        <div class="bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl text-center font-bold text-sm shadow-sm max-w-2xl mx-auto">
+            ⚠️ {{ error_message }}
+        </div>
+        {% endif %}
+
         <div class="grid lg:grid-cols-2 gap-10">
             <div class="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 h-fit">
                 <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">🚀 Global Alerts</h2>
@@ -35,27 +41,41 @@
                             <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Finance & Legal"> Finance</label>
                         </div>
                     </div>
-                    <button class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg">UPDATE PROFILE</button>
+                    <button class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-indigo-700 transition">UPDATE PROFILE</button>
                 </form>
             </div>
 
             <div class="space-y-6">
+                
                 <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
                     <h3 class="font-bold mb-4">Add Target</h3>
-                    <form action="/add-company" method="post" class="space-y-3">
-                        <input type="text" name="name" placeholder="Company Name" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none">
-                        <input type="url" name="url" placeholder="Careers URL" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none">
-                        <button class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">+ Add to List</button>
+                    <form action="/add" method="post" class="space-y-3">
+                        <input type="text" name="name" placeholder="Company Name (e.g. SolarEdge)" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500">
+                        <input type="url" name="url" placeholder="Careers URL" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500">
+                        <button class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition">+ Add to List</button>
                     </form>
                 </div>
 
                 <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
-                    <h3 class="font-bold mb-4">Monitoring</h3>
-                    <div class="space-y-2" id="list">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold">Monitoring</h3>
+                        <span class="text-xs font-bold px-3 py-1 bg-slate-100 rounded-full text-slate-500 border">
+                            {{ companies|length }} / 5 Used
+                        </span>
+                    </div>
+
+                    <div class="space-y-2 max-h-[300px] overflow-y-auto" id="list">
+                        {% if companies|length == 0 %}
+                            <p class="text-center text-slate-400 text-sm py-4">No companies yet.</p>
+                        {% endif %}
+
                         {% for comp in companies %}
-                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border" id="item-{{ comp.id }}">
-                            <span class="font-bold text-sm">{{ comp.name }}</span>
-                            <button onclick="removeSource({{ comp.id }})" class="text-red-400 text-xs font-bold p-2">Remove</button>
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border hover:border-indigo-200 transition" id="item-{{ comp.id }}">
+                            <div class="flex flex-col">
+                                <span class="font-bold text-sm">{{ comp.name }}</span>
+                                <a href="{{ comp.url }}" target="_blank" class="text-[10px] text-indigo-400 hover:underline truncate max-w-[150px]">{{ comp.url }}</a>
+                            </div>
+                            <button onclick="removeSource({{ comp.id }})" class="text-red-400 hover:text-red-600 text-xs font-bold p-2 bg-white rounded-lg border border-slate-100 shadow-sm">Remove</button>
                         </div>
                         {% endfor %}
                     </div>
@@ -66,11 +86,31 @@
 
     <script>
         async function removeSource(id) {
-            if (!confirm('Remove?')) return;
+            if (!confirm('Are you sure you want to remove this company?')) return;
+            
+            // יצירת טופס נתונים כדי להתאים ל-Form(...) ב-Python
+            const formData = new FormData();
+            formData.append('company_id', id);
+
             try {
-                const res = await fetch(`/delete-company/${id}`, { method: 'POST' });
-                if (res.ok) document.getElementById(`item-${id}`).remove();
-            } catch (e) { alert('Error'); }
+                const res = await fetch('/delete-company', { 
+                    method: 'POST',
+                    body: formData
+                });
+                
+                // אם המחיקה הצליחה והשרת החזיר הפניה או הצלחה
+                if (res.ok || res.redirected) {
+                    const item = document.getElementById(`item-${id}`);
+                    if (item) item.remove();
+                    // אופציונלי: רענון הדף כדי לעדכן את המונה
+                    window.location.reload(); 
+                } else {
+                    alert('Failed to delete company');
+                }
+            } catch (e) { 
+                console.error(e);
+                alert('Error connecting to server'); 
+            }
         }
     </script>
 </body>
