@@ -5,6 +5,40 @@ from fastapi.responses import RedirectResponse
 import database
 from scraper import run_scraper_engine
 
+def init_db():
+    """
+    פונקציה זו רצה בהתחלה ויוצרת את הטבלאות החסרות
+    כדי למנוע את השגיאה no such table
+    """
+    print("🛠 Checking database tables...")
+    
+    # שים לב: וודא שהשם jobs.db הוא אותו שם שאתה משתמש בו בשאר הקוד
+    conn = sqlite3.connect('jobs.db') 
+    c = conn.cursor()
+    
+    # יצירת טבלת המשרות (התיקון לקריסה בוויקס)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS jobs_cache (
+            id TEXT PRIMARY KEY,
+            company TEXT,
+            title TEXT,
+            link TEXT,
+            seen_date TEXT
+        )
+    ''')
+    
+    # יצירת טבלת המנויים (כדי שיהיה איפה לשמור את המייל שלך)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS subscribers (
+            email TEXT PRIMARY KEY,
+            interests TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("✅ Database tables created successfully.")
+
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 

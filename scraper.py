@@ -149,4 +149,6 @@ def run_scraper_engine():
     print(f"{'='*40}")
 
 if __name__ == "__main__":
-    run_scraper_engine()
+    init_db()
+    print("🚀 Server is starting on port 10000...")
+    app.run(host="0.0.0.0", port=10000)
