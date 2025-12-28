@@ -43,7 +43,14 @@ if __name__ == "__main__":
 def add_company(name, url):
     conn = sqlite3.connect('jobs.db')
     cursor = conn.cursor()
-    # אנחנו מכניסים את הנתונים לטבלה שיצרנו
     cursor.execute('INSERT INTO companies (name, careers_url) VALUES (?, ?)', (name, url))
+    conn.commit()
+    conn.close()
+
+def add_user(email):
+    conn = sqlite3.connect('jobs.db')
+    cursor = conn.cursor()
+    # שימוש ב-INSERT OR IGNORE מונע קריסה אם המייל כבר קיים במערכת
+    cursor.execute('INSERT OR IGNORE INTO users (email) VALUES (?)', (email,))
     conn.commit()
     conn.close()

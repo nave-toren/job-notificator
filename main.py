@@ -3,6 +3,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 import database
 from scraper import run_scraper_engine # ייבוא מנוע הסריקה
+from typing import List
+from fastapi import FastAPI, Request, Form, BackgroundTasks
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -18,11 +20,15 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "companies": companies})
 
 @app.post("/subscribe")
-async def subscribe(email: str = Form(...), company_id: int = Form(...), department: str = Form(...)):
-    user_id = database.add_user(email)
-    database.add_subscription(user_id, company_id, department)
-    return RedirectResponse(url="/", status_code=303)
+async def subscribe(email: str = Form(...), departments: List[str] = Form(default=[])):
+    # אנחנו שומרים את המשתמש בדאטה-בייס
+    database.add_user(email)
 
+    # הערה: בשלב הזה אנחנו שומרים רק את המייל.
+    # בעתיד נוכל להשתמש ברשימת ה-departments כדי לסנן משרות.
+    print(f"New user: {email}, Interests: {departments}")
+
+    return RedirectResponse(url="/", status_code=303)
 # --- נתיב חדש להפעלת הסורק ---
 @app.get("/trigger-scan")
 async def trigger_scan(background_tasks: BackgroundTasks):
