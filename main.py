@@ -1,3 +1,4 @@
+import sqlite3  # הוספתי את זה כי זה היה חסר
 from typing import List, Optional
 from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.templating import Jinja2Templates
@@ -5,14 +6,15 @@ from fastapi.responses import RedirectResponse
 import database
 from scraper import run_scraper_engine
 
-def init_db():
+# --- פונקציית יצירת הטבלאות (התיקון) ---
+def init_db_tables():
     """
     פונקציה זו רצה בהתחלה ויוצרת את הטבלאות החסרות
     כדי למנוע את השגיאה no such table
     """
     print("🛠 Checking database tables...")
     
-    # שים לב: וודא שהשם jobs.db הוא אותו שם שאתה משתמש בו בשאר הקוד
+    # וודא שהשם jobs.db הוא אותו שם שאתה משתמש בו בשאר הקוד
     conn = sqlite3.connect('jobs.db') 
     c = conn.cursor()
     
@@ -27,7 +29,7 @@ def init_db():
         )
     ''')
     
-    # יצירת טבלת המנויים (כדי שיהיה איפה לשמור את המייל שלך)
+    # יצירת טבלת המנויים
     c.execute('''
         CREATE TABLE IF NOT EXISTS subscribers (
             email TEXT PRIMARY KEY,
@@ -45,7 +47,14 @@ templates = Jinja2Templates(directory="templates")
 # --- אתחול הדאטה-בייס בהפעלה ---
 @app.on_event("startup")
 def startup_db():
-    database.init_db()
+    # 1. מריץ את האתחול הרגיל שלך (אם יש כזה בקובץ database.py)
+    try:
+        database.init_db()
+    except Exception as e:
+        print(f"Warning in database.init_db: {e}")
+
+    # 2. מריץ את יצירת הטבלאות החסרות (התיקון שלנו)
+    init_db_tables()
 
 # --- דף הבית ---
 @app.get("/")
@@ -128,7 +137,6 @@ async def delete_company(company_id: int = Form(...)):
     return RedirectResponse(url="/", status_code=303)
 
 # --- נתיב להפעלת הסורק (עבור Cron Job) ---
-# הערה: שמרתי גם על /scan וגם על /trigger-scan כדי שיתאים למה שהגדרת ב-Cron
 @app.get("/scan")
 @app.get("/trigger-scan")
 async def trigger_scan(background_tasks: BackgroundTasks):
