@@ -114,16 +114,21 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
 
 # --- הרשמה לקבלת התראות ---
 @app.post("/subscribe")
-async def subscribe(email: str = Form(...), departments: List[str] = Form(default=[])):
-    # שמירת המשתמש בדאטה-בייס
+async def subscribe(
+    background_tasks: BackgroundTasks,  # <--- הוספנו את זה כדי לאפשר הרצה ברקע
+    email: str = Form(...), 
+    departments: List[str] = Form(default=[])
+    # 1. שמירת המשתמש בדאטה-בייס
     database.add_user(email)
+    print(f"✅ New Subscriber registered: {email}")
     
-    # (בעתיד: כאן נשמור גם את ה-departments אם נרצה לסנן לפי תחום)
-    print(f"New Subscriber: {email}, Interests: {departments}")
+    # 2. --- השינוי הגדול: הפעלת מנוע סריקה מיידית! ---
+    print("🚀 Triggering IMMEDIATE scan for new user...")
+    background_tasks.add_task(run_scraper_engine)
     
-    # הפניה מחדש לדף הבית עם דגל הצלחה
+    # 3. החזרת המשתמש לדף הבית
     return RedirectResponse(url="/?subscribed=true", status_code=303)
-
+    
 # --- הסרה מרשימת התפוצה ---
 @app.post("/unsubscribe")
 async def unsubscribe(email: str = Form(...)):
