@@ -54,3 +54,10 @@ def add_user(email):
     cursor.execute('INSERT OR IGNORE INTO users (email) VALUES (?)', (email,))
     conn.commit()
     conn.close()
+
+def remove_user(email):
+    conn = sqlite3.connect('jobs.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM users WHERE email = ?', (email,))
+    conn.commit()
+    conn.close()
