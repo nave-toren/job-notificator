@@ -1,6 +1,7 @@
 import sqlite3
 import smtplib
 import time
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from bs4 import BeautifulSoup
