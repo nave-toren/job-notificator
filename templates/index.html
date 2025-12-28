@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Seeker | 🔍</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 font-sans p-4 md:p-12 text-slate-900">
+
+    <div class="max-w-6xl mx-auto space-y-10">
+        <div class="text-center">
+            <h1 class="text-5xl font-black text-indigo-600 tracking-tighter italic flex items-center justify-center gap-3">
+                <span>🔍</span> Job Seeker
+            </h1>
+            <p class="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Nave Toren Edition</p>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-10">
+            <div class="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 h-fit">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">🚀 Global Alerts</h2>
+                <form action="/subscribe" method="post" class="space-y-6">
+                    <input type="email" name="email" placeholder="Email" required class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500">
+                    
+                    <div class="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p class="text-[10px] font-black uppercase text-indigo-600 mb-4 tracking-widest text-center">Interests</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="R&D"> R&D / SW</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Student"> Student</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Data"> Data & AI</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Product"> Product</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Marketing"> Marketing</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Sales & Biz"> Sales & Biz</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="HR & Ops"> HR & Ops</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="departments" value="Finance & Legal"> Finance</label>
+                        </div>
+                    </div>
+                    <button class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg">UPDATE PROFILE</button>
+                </form>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
+                    <h3 class="font-bold mb-4">Add Target</h3>
+                    <form action="/add-company" method="post" class="space-y-3">
+                        <input type="text" name="name" placeholder="Company Name" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none">
+                        <input type="url" name="url" placeholder="Careers URL" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none">
+                        <button class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">+ Add to List</button>
+                    </form>
+                </div>
+
+                <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
+                    <h3 class="font-bold mb-4">Monitoring</h3>
+                    <div class="space-y-2" id="list">
+                        {% for comp in companies %}
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border" id="item-{{ comp.id }}">
+                            <span class="font-bold text-sm">{{ comp.name }}</span>
+                            <button onclick="removeSource({{ comp.id }})" class="text-red-400 text-xs font-bold p-2">Remove</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function removeSource(id) {
+            if (!confirm('Remove?')) return;
+            try {
+                const res = await fetch(`/delete-company/${id}`, { method: 'POST' });
+                if (res.ok) document.getElementById(`item-${id}`).remove();
+            } catch (e) { alert('Error'); }
+        }
+    </script>
+</body>
+</html>
