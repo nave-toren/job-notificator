@@ -20,10 +20,8 @@ def init_db_tables():
     # --- מחיקת הטבלאות הישנות (ניקוי הזיכרון התקוע) ---
     c.execute("DROP TABLE IF EXISTS jobs_cache")
     c.execute("DROP TABLE IF EXISTS subscribers")
-    # c.execute("DROP TABLE IF EXISTS companies") # השארנו בהערה כדי לא למחוק חברות אם לא חייבים
-
+    
     # --- יצירה מחדש (נקייה ותקינה) ---
-    # טבלת משרות
     c.execute('''
         CREATE TABLE jobs_cache (
             id TEXT PRIMARY KEY,
@@ -34,7 +32,6 @@ def init_db_tables():
         )
     ''')
     
-    # טבלת מנויים
     c.execute('''
         CREATE TABLE subscribers (
             email TEXT PRIMARY KEY,
@@ -52,13 +49,12 @@ templates = Jinja2Templates(directory="templates")
 # --- אתחול הדאטה-בייס בהפעלה ---
 @app.on_event("startup")
 def startup_db():
-    # 1. מריץ את האתחול הרגיל שלך
     try:
         database.init_db()
     except Exception as e:
         print(f"Warning in database.init_db: {e}")
 
-    # 2. מריץ את הניקוי והבנייה מחדש
+    # מריץ את הניקוי והבנייה מחדש
     init_db_tables()
 
 # --- דף הבית ---
@@ -91,6 +87,7 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
         })
 
     valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "culture", "opportunities", "vacancy"]
+    # תיקון ואימות סוגריים כאן:
     if not any(keyword in url.lower() for keyword in valid_keywords):
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -109,28 +106,37 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
             "error_message": f"❌ Error: {str(e)}"
         })
 
-# --- הרשמה + סריקה מיידית (התיקון החשוב) ---
+# --- הרשמה + סריקה מיידית ---
 @app.post("/subscribe")
 async def subscribe(
     background_tasks: BackgroundTasks,
     email: str = Form(...), 
     departments: List[str] = Form(default=[])
 ):
-    # 1. שמירת משתמש
     database.add_user(email)
     print(f"✅ New Subscriber: {email}")
     
-    # 2. הפעלת סריקה מיידית ברקע!
     print("🚀 Triggering IMMEDIATE scan for new user...")
     background_tasks.add_task(run_scraper_engine)
     
     return RedirectResponse(url="/?subscribed=true", status_code=303)
 
-# --- שאר הפונקציות ---
+# --- הסרה ---
 @app.post("/unsubscribe")
 async def unsubscribe(email: str = Form(...)):
     database.remove_user(email)
     return RedirectResponse(url="/?unsubscribed=true", status_code=303)
 
+# --- מחיקת חברה ---
 @app.post("/delete-company")
-async def delete_company(
+async def delete_company(company_id: int = Form(...)):
+    database.delete_company(company_id)
+    return RedirectResponse(url="/", status_code=303)
+
+# --- טריגר לסריקה ---
+@app.get("/scan")
+@app.get("/trigger-scan")
+async def trigger_scan(background_tasks: BackgroundTasks):
+    print("⏳ Triggering scan via Cron...")
+    background_tasks.add_task(run_scraper_engine)
+    return {"status": "success", "message": "Job scan started in background"}
