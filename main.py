@@ -1,4 +1,4 @@
-import sqlite3  # הוספתי את זה כי זה היה חסר
+import sqlite3
 from typing import List, Optional
 from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.templating import Jinja2Templates
@@ -6,32 +6,37 @@ from fastapi.responses import RedirectResponse
 import database
 from scraper import run_scraper_engine
 
-# --- פונקציית יצירת הטבלאות (התיקון) ---
+# --- פונקציית יצירת הטבלאות (גרסת הניקוי והאיפוס) ---
 def init_db_tables():
     """
-    פונקציה זו רצה בהתחלה ויוצרת את הטבלאות החסרות
-    כדי למנוע את השגיאה no such table
+    פונקציה זו רצה בהתחלה.
+    מוחקת גרסאות ישנות ויוצרת דאטה-בייס נקי ותקין!
     """
-    print("🛠 Checking database tables...")
+    print("🛠 Maintenance: Resetting database tables...")
     
-    # וודא שהשם jobs.db הוא אותו שם שאתה משתמש בו בשאר הקוד
     conn = sqlite3.connect('jobs.db') 
     c = conn.cursor()
     
-    # יצירת טבלת המשרות (התיקון לקריסה בוויקס)
+    # --- מחיקת הטבלאות הישנות (ניקוי הזיכרון התקוע) ---
+    c.execute("DROP TABLE IF EXISTS jobs_cache")
+    c.execute("DROP TABLE IF EXISTS subscribers")
+    # c.execute("DROP TABLE IF EXISTS companies") # השארנו בהערה כדי לא למחוק חברות אם לא חייבים
+
+    # --- יצירה מחדש (נקייה ותקינה) ---
+    # טבלת משרות
     c.execute('''
-        CREATE TABLE IF NOT EXISTS jobs_cache (
+        CREATE TABLE jobs_cache (
             id TEXT PRIMARY KEY,
-            company TEXT,
+            company_id INTEGER,
             title TEXT,
             link TEXT,
             seen_date TEXT
         )
     ''')
     
-    # יצירת טבלת המנויים
+    # טבלת מנויים
     c.execute('''
-        CREATE TABLE IF NOT EXISTS subscribers (
+        CREATE TABLE subscribers (
             email TEXT PRIMARY KEY,
             interests TEXT
         )
@@ -39,7 +44,7 @@ def init_db_tables():
     
     conn.commit()
     conn.close()
-    print("✅ Database tables created successfully.")
+    print("✅ Database tables reset and created successfully.")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -47,25 +52,23 @@ templates = Jinja2Templates(directory="templates")
 # --- אתחול הדאטה-בייס בהפעלה ---
 @app.on_event("startup")
 def startup_db():
-    # 1. מריץ את האתחול הרגיל שלך (אם יש כזה בקובץ database.py)
+    # 1. מריץ את האתחול הרגיל שלך
     try:
         database.init_db()
     except Exception as e:
         print(f"Warning in database.init_db: {e}")
 
-    # 2. מריץ את יצירת הטבלאות החסרות (התיקון שלנו)
+    # 2. מריץ את הניקוי והבנייה מחדש
     init_db_tables()
 
 # --- דף הבית ---
 @app.get("/")
 async def index(request: Request, subscribed: bool = False, unsubscribed: bool = False):
-    # שליפת רשימת החברות להצגה
     companies = database.get_companies()
     
-    # לוגיקה להודעות הצלחה (Feedback) למשתמש
     success_message = None
     if subscribed:
-        success_message = "You're in! 🤘 Details saved. If we match any jobs to your vibe, you'll get an email. Good luck!"
+        success_message = "You're in! 🤘 Scanning started immediately. Check your inbox in a minute!"
     elif unsubscribed:
         success_message = "You have been unsubscribed. No more emails from us. 👋"
 
@@ -75,13 +78,11 @@ async def index(request: Request, subscribed: bool = False, unsubscribed: bool =
         "success_message": success_message
     })
 
-# --- הוספת חברה חדשה (עם בדיקות תקינות) ---
+# --- הוספת חברה ---
 @app.post("/add")
 async def add_company(request: Request, name: str = Form(...), url: str = Form(...)):
-    # 1. שליפת הרשימה הקיימת
     current_companies = database.get_companies()
     
-    # 2. בדיקת מגבלה (עד 5 חברות)
     if len(current_companies) >= 5:
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -89,18 +90,14 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
             "error_message": "✋ System is limited to 5 companies to maintain performance."
         })
 
-    # 3. אימות URL - בדיקה שהלינק הוא לדף קריירה
     valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "culture", "opportunities", "vacancy"]
-    
-    # בדיקה האם ה-URL מכיל לפחות אחת מהמילים (באותיות קטנות)
     if not any(keyword in url.lower() for keyword in valid_keywords):
         return templates.TemplateResponse("index.html", {
             "request": request,
             "companies": current_companies,
-            "error_message": "⚠️ The link must be a Careers page! (Missing words like 'careers', 'jobs', 'positions' in the URL)."
+            "error_message": "⚠️ The link must be a Careers page!"
         })
 
-    # 4. ניסיון הוספה לדאטה-בייס
     try:
         database.add_company(name, url)
         return RedirectResponse(url="/", status_code=303)
@@ -109,46 +106,31 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
         return templates.TemplateResponse("index.html", {
             "request": request,
             "companies": current_companies,
-            "error_message": f"❌ Oops, something went wrong: {str(e)}"
+            "error_message": f"❌ Error: {str(e)}"
         })
 
-# --- הרשמה לקבלת התראות ---
+# --- הרשמה + סריקה מיידית (התיקון החשוב) ---
 @app.post("/subscribe")
 async def subscribe(
-    background_tasks: BackgroundTasks,  # <--- הוספנו את זה כדי לאפשר הרצה ברקע
+    background_tasks: BackgroundTasks,
     email: str = Form(...), 
     departments: List[str] = Form(default=[])
-    # 1. שמירת המשתמש בדאטה-בייס
+):
+    # 1. שמירת משתמש
     database.add_user(email)
-    print(f"✅ New Subscriber registered: {email}")
+    print(f"✅ New Subscriber: {email}")
     
-    # 2. --- השינוי הגדול: הפעלת מנוע סריקה מיידית! ---
+    # 2. הפעלת סריקה מיידית ברקע!
     print("🚀 Triggering IMMEDIATE scan for new user...")
     background_tasks.add_task(run_scraper_engine)
     
-    # 3. החזרת המשתמש לדף הבית
     return RedirectResponse(url="/?subscribed=true", status_code=303)
-    
-# --- הסרה מרשימת התפוצה ---
+
+# --- שאר הפונקציות ---
 @app.post("/unsubscribe")
 async def unsubscribe(email: str = Form(...)):
     database.remove_user(email)
     return RedirectResponse(url="/?unsubscribed=true", status_code=303)
 
-# --- מחיקת חברה מהרשימה ---
 @app.post("/delete-company")
-async def delete_company(company_id: int = Form(...)):
-    database.delete_company(company_id)
-    return RedirectResponse(url="/", status_code=303)
-
-# --- נתיב להפעלת הסורק (עבור Cron Job) ---
-@app.get("/scan")
-@app.get("/trigger-scan")
-async def trigger_scan(background_tasks: BackgroundTasks):
-    """
-    נתיב זה מיועד להפעלה על ידי שירות חיצוני (Cron-job.org).
-    הסריקה תרוץ ברקע (Background Task) כדי לא לתקוע את השרת.
-    """
-    print("⏳ Triggering scan via Cron...")
-    background_tasks.add_task(run_scraper_engine)
-    return {"status": "success", "message": "Job scan started in background"}
+async def delete_company(
