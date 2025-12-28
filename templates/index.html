@@ -18,7 +18,7 @@
 
         {% if error_message %}
         <div class="bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl text-center font-bold text-sm shadow-sm max-w-2xl mx-auto">
-            ⚠️ {{ error_message }}
+            {{ error_message }}
         </div>
         {% endif %}
 
@@ -48,10 +48,16 @@
             <div class="space-y-6">
                 
                 <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
-                    <h3 class="font-bold mb-4">Add Target</h3>
+                    <h3 class="font-bold mb-2">Add Target</h3>
+                    
+                    <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed">
+                        💡 <strong>Tip:</strong> Paste the direct link to the <u>Careers</u> or <u>Open Positions</u> page.<br>
+                        The URL usually contains words like "careers", "jobs", "positions".
+                    </p>
+
                     <form action="/add" method="post" class="space-y-3">
                         <input type="text" name="name" placeholder="Company Name (e.g. SolarEdge)" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500">
-                        <input type="url" name="url" placeholder="Careers URL" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500">
+                        <input type="url" name="url" placeholder="https://company.com/careers/..." required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500">
                         <button class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition">+ Add to List</button>
                     </form>
                 </div>
@@ -71,11 +77,11 @@
 
                         {% for comp in companies %}
                         <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border hover:border-indigo-200 transition" id="item-{{ comp.id }}">
-                            <div class="flex flex-col">
+                            <div class="flex flex-col overflow-hidden">
                                 <span class="font-bold text-sm">{{ comp.name }}</span>
-                                <a href="{{ comp.url }}" target="_blank" class="text-[10px] text-indigo-400 hover:underline truncate max-w-[150px]">{{ comp.url }}</a>
+                                <a href="{{ comp.url }}" target="_blank" class="text-[10px] text-indigo-400 hover:underline truncate w-full max-w-[180px] block">{{ comp.url }}</a>
                             </div>
-                            <button onclick="removeSource({{ comp.id }})" class="text-red-400 hover:text-red-600 text-xs font-bold p-2 bg-white rounded-lg border border-slate-100 shadow-sm">Remove</button>
+                            <button onclick="removeSource({{ comp.id }})" class="text-red-400 hover:text-red-600 text-xs font-bold p-2 bg-white rounded-lg border border-slate-100 shadow-sm shrink-0 ml-2">Remove</button>
                         </div>
                         {% endfor %}
                     </div>
@@ -88,7 +94,6 @@
         async function removeSource(id) {
             if (!confirm('Are you sure you want to remove this company?')) return;
             
-            // יצירת טופס נתונים כדי להתאים ל-Form(...) ב-Python
             const formData = new FormData();
             formData.append('company_id', id);
 
@@ -98,12 +103,10 @@
                     body: formData
                 });
                 
-                // אם המחיקה הצליחה והשרת החזיר הפניה או הצלחה
                 if (res.ok || res.redirected) {
                     const item = document.getElementById(`item-${id}`);
                     if (item) item.remove();
-                    // אופציונלי: רענון הדף כדי לעדכן את המונה
-                    window.location.reload(); 
+                    window.location.reload(); // Refresh to update the counter
                 } else {
                     alert('Failed to delete company');
                 }

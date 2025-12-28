@@ -40,30 +40,39 @@ async def delete_company(company_id: int = Form(...)):
 
 @app.post("/add")
 async def add_company(request: Request, name: str = Form(...), url: str = Form(...)):
-    # 1. שליפת הרשימה הקיימת
+    # 1. Get current companies
     current_companies = database.get_companies()
     
-    # 2. בדיקת מגבלה (עד 5 חברות)
+    # 2. Check limit (Max 5)
     if len(current_companies) >= 5:
         return templates.TemplateResponse("index.html", {
             "request": request,
             "companies": current_companies,
-            "error_message": "✋ המערכת מוגבלת ל-5 חברות כרגע כדי לשמור על ביצועים."
+            "error_message": "✋ System is limited to 5 companies to maintain performance."
         })
 
-    # 3. ניסיון הוספה בטוח (Try-Except)
-    try:
-        # כאן אנחנו מנסים להוסיף. אם ה-URL לא תקין או הדאטה-בייס נעול - זה יקפוץ ל-except
-        database.add_company(name, url)
-        
-        # אם הצליח - חוזרים לדף הבית נקי
-        return RedirectResponse(url="/", status_code=303)
-        
-    except Exception as e:
-        # 4. במקרה של שגיאה - לא להקריס! להציג את השגיאה למשתמש
-        print(f"Error adding company: {e}") # בשביל הלוגים שלך
+    # 3. Validate URL Keywords
+    # List of words expected in a careers page URL
+    valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "culture", "opportunities", "vacancy"]
+    
+    # Check if URL contains at least one keyword (case insensitive)
+    if not any(keyword in url.lower() for keyword in valid_keywords):
         return templates.TemplateResponse("index.html", {
             "request": request,
             "companies": current_companies,
-            "error_message": f"❌ אופס, משהו השתבש: {str(e)}"
+            "error_message": "⚠️ The link must be a Careers page! (Missing words like 'careers', 'jobs', 'positions' in the URL)."
+        })
+
+    # 4. Try to add to DB
+    try:
+        database.add_company(name, url)
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        # Log the error for you
+        print(f"Error adding company: {e}")
+        # Show error to user
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "companies": current_companies,
+            "error_message": f"❌ Oops, something went wrong: {str(e)}"
         })
