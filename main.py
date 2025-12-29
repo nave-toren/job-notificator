@@ -6,22 +6,19 @@ from fastapi.responses import RedirectResponse
 import database
 from scraper import run_scraper_engine
 
-# --- פונקציית יצירת הטבלאות (גרסת הניקוי והאיפוס) ---
+# --- פונקציית יצירת הטבלאות (גרסת התיקון הסופי) ---
 def init_db_tables():
-    """
-    פונקציה זו רצה בהתחלה.
-    מוחקת גרסאות ישנות ויוצרת דאטה-בייס נקי ותקין!
-    """
-    print("🛠 Maintenance: Resetting database tables...")
+    print("🛠 Maintenance: Resetting database tables to match Scraper...")
     
     conn = sqlite3.connect('jobs.db') 
     c = conn.cursor()
     
-    # --- מחיקת הטבלאות הישנות (ניקוי הזיכרון התקוע) ---
+    # מחיקת כל הגרסאות הישנות למניעת התנגשויות
     c.execute("DROP TABLE IF EXISTS jobs_cache")
-    c.execute("DROP TABLE IF EXISTS subscribers")
+    c.execute("DROP TABLE IF EXISTS subscribers")   # השם הישן
+    c.execute("DROP TABLE IF EXISTS subscriptions") # השם החדש (ליתר ביטחון)
     
-    # --- יצירה מחדש (נקייה ותקינה) ---
+    # יצירה מחדש - טבלת משרות
     c.execute('''
         CREATE TABLE jobs_cache (
             id TEXT PRIMARY KEY,
@@ -32,8 +29,9 @@ def init_db_tables():
         )
     ''')
     
+    # יצירה מחדש - טבלת מנויים (בשם subscriptions שהסורק דורש!)
     c.execute('''
-        CREATE TABLE subscribers (
+        CREATE TABLE subscriptions (
             email TEXT PRIMARY KEY,
             interests TEXT
         )
@@ -41,7 +39,7 @@ def init_db_tables():
     
     conn.commit()
     conn.close()
-    print("✅ Database tables reset and created successfully.")
+    print("✅ Database tables (jobs_cache, subscriptions) created successfully.")
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -49,13 +47,14 @@ templates = Jinja2Templates(directory="templates")
 # --- אתחול הדאטה-בייס בהפעלה ---
 @app.on_event("startup")
 def startup_db():
+    # קודם כל מוחקים ויוצרים מחדש את הטבלאות הנכונות
+    init_db_tables()
+    
+    # מריצים את האתחול הרגיל (ליתר ביטחון, למקרה שיש שם לוגיקה נוספת)
     try:
         database.init_db()
     except Exception as e:
-        print(f"Warning in database.init_db: {e}")
-
-    # מריץ את הניקוי והבנייה מחדש
-    init_db_tables()
+        print(f"Note: database.init_db skipped or failed (expected if tables exist): {e}")
 
 # --- דף הבית ---
 @app.get("/")
@@ -66,7 +65,7 @@ async def index(request: Request, subscribed: bool = False, unsubscribed: bool =
     if subscribed:
         success_message = "You're in! 🤘 Scanning started immediately. Check your inbox in a minute!"
     elif unsubscribed:
-        success_message = "You have been unsubscribed. No more emails from us. 👋"
+        success_message = "You have been unsubscribed. 👋"
 
     return templates.TemplateResponse("index.html", {
         "request": request, 
@@ -83,11 +82,10 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
         return templates.TemplateResponse("index.html", {
             "request": request,
             "companies": current_companies,
-            "error_message": "✋ System is limited to 5 companies to maintain performance."
+            "error_message": "✋ Limit: 5 companies."
         })
 
     valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "culture", "opportunities", "vacancy"]
-    # תיקון ואימות סוגריים כאן:
     if not any(keyword in url.lower() for keyword in valid_keywords):
         return templates.TemplateResponse("index.html", {
             "request": request,
@@ -99,7 +97,6 @@ async def add_company(request: Request, name: str = Form(...), url: str = Form(.
         database.add_company(name, url)
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
-        print(f"Error adding company: {e}")
         return templates.TemplateResponse("index.html", {
             "request": request,
             "companies": current_companies,
@@ -113,9 +110,14 @@ async def subscribe(
     email: str = Form(...), 
     departments: List[str] = Form(default=[])
 ):
-    database.add_user(email)
-    print(f"✅ New Subscriber: {email}")
+    # שומרים את המשתמש (וודא ששינית ל-subscriptions ב-database.py!)
+    try:
+        database.add_user(email)
+        print(f"✅ New Subscriber added: {email}")
+    except Exception as e:
+        print(f"❌ Error adding user to DB (Check table name in database.py): {e}")
     
+    # מפעילים סריקה מיידית
     print("🚀 Triggering IMMEDIATE scan for new user...")
     background_tasks.add_task(run_scraper_engine)
     
