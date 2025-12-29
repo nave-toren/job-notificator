@@ -1,153 +1,157 @@
+import asyncio
 import sqlite3
+from datetime import datetime
+from playwright.async_api import async_playwright
+import database
 import smtplib
-import time
-import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
-from dotenv import load_dotenv
+import os
 
-load_dotenv()
-
-# --- CONFIGURATION ---
+# --- CONFIGURATION (כמו שביקשת) ---
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = os.getenv("EMAIL_USER")
 SENDER_PASSWORD = os.getenv("EMAIL_PASSWORD")
 DISPLAY_NAME = "Job Seeker 🔍"
 
-DEPARTMENTS = {
-    'R&D': ['developer', 'engineer', 'fullstack', 'backend', 'frontend', 'software', 'qa', 'automation', 'devops', 'cyber', 'mobile', 'architect', 'embedded'],
-    'Student': ['student', 'intern', 'internship', 'graduate', 'junior', 'university', 'entry level'],
-    'Data': ['data scientist', 'data analyst', 'bi', 'machine learning', 'ml', 'ai', 'big data', 'sql', 'tableau', 'researcher'],
-    'Product': ['product manager', 'product owner', 'ux', 'ui', 'designer', 'product designer', 'ux/ui'],
-    'Marketing': ['marketing', 'ua', 'acquisition', 'growth', 'seo', 'content', 'brand', 'copywriter', 'pr'],
-    'Sales & Biz': ['sales', 'account manager', 'sdr', 'bdr', 'business development', 'partnerships', 'customer success'],
-    'HR & Ops': ['hr', 'recruiter', 'talent acquisition', 'operations', 'office manager', 'people', 'admin'],
-    'Finance & Legal': ['finance', 'legal', 'lawyer', 'accounting', 'controller', 'analyst', 'bookkeeper', 'tax']
-}
-
-def send_notification_email(receiver_email, job_title, company_name, job_link, department):
-    """ שליחת מייל מעוצב למשתמש """
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = f"{DISPLAY_NAME} <{SENDER_EMAIL}>"
-        msg['To'] = receiver_email
-        msg['Subject'] = f"🚀 New {department} Position at {company_name}!"
-
-        body = f"""
-        Hello!
-        
-        Job Seeker found a new position matching your profile:
-        
-        🏢 Company: {company_name}
-        💼 Position: {job_title}
-        🏷️ Department: {department}
-        🔗 Apply here: {job_link}
-        
-        Good luck with your application!
-        ---------------------------------
-        Created by Nave Toren
-        """
-        msg.attach(MIMEText(body, 'plain'))
-
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.send_message(msg)
-        print(f"   ✅ Email sent to {receiver_email}")
-    except Exception as e:
-        print(f"   ❌ Email error: {e}")
-
-def run_scraper_engine():
-    """ המנוע הראשי שסורק את האתרים ושולח התראות """
-    print(f"\n{'='*40}")
-    print("🚀 Job Seeker Engine is starting...")
-    print(f"{'='*40}\n")
-    
-    conn = sqlite3.connect('jobs.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT id, name, careers_url FROM companies")
-    companies = cursor.fetchall()
-    
-    if not companies:
-        print("ℹ️ No companies to scan. Add some via the website first.")
+async def send_email(to_email, new_jobs):
+    if not new_jobs:
         return
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        
-        for comp in companies:
-            comp_id, comp_name, url = comp['id'], comp['name'], comp['careers_url']
-            print(f"🔎 Scanning {comp_name}...")
-            
-            page = context.new_page()
-            try:
+    if not SENDER_EMAIL or not SENDER_PASSWORD:
+        print("❌ CRITICAL: Missing EMAIL_USER or EMAIL_PASSWORD in environment variables.")
+        return
+
+    subject = f"🚀 {len(new_jobs)} New Jobs Found!"
     
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    body = "<h3>New positions found matching your interests:</h3><ul>"
+    for job in new_jobs:
+        body += f"<li><a href='{job['link']}'><strong>{job['title']}</strong></a> at {job['company']}</li>"
+    body += "</ul><p>Good luck! 🤘</p>"
 
-                time.sleep(5) 
+    msg = MIMEMultipart()
+    msg['From'] = f"{DISPLAY_NAME} <{SENDER_EMAIL}>"
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
+        server.quit()
+        print(f"📧 Email sent successfully to {to_email}")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+
+async def scrape_company(page, company):
+    # company tuple: (id, name, url)
+    url = company[2]
+    name = company[1]
+    print(f"\n🔎 Scanning {name} ({url})...")
+
+    try:
+        await page.goto(url, timeout=60000)
+        try:
+            await page.wait_for_load_state('networkidle', timeout=10000)
+        except:
+            pass 
+        
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await asyncio.sleep(2)
+
+        jobs = []
+
+        # --- Earnix / Comeet ---
+        comeet_jobs = await page.query_selector_all('a[href*="comeet.com"], .positionItem a')
+        if comeet_jobs:
+            print(f"   Detected Comeet structure for {name}")
+            for job in comeet_jobs:
+                title = await job.inner_text()
+                link = await job.get_attribute('href')
+                if title and link:
+                    jobs.append({'title': title.strip(), 'link': link, 'company': name})
+
+        # --- Greenhouse ---
+        elif await page.query_selector('.opening'):
+            print(f"   Detected Greenhouse structure for {name}")
+            greenhouse_jobs = await page.query_selector_all('.opening a')
+            for job in greenhouse_jobs:
+                title = await job.inner_text()
+                link = await job.get_attribute('href')
+                if title and link:
+                    if not link.startswith('http'):
+                        link = f"https://boards.greenhouse.io{link}"
+                    jobs.append({'title': title.strip(), 'link': link, 'company': name})
+
+        # --- Generic Scanner ---
+        else:
+            print(f"   Using generic scanner for {name}")
+            links = await page.query_selector_all('a')
+            for link in links:
+                txt = await link.inner_text()
+                href = await link.get_attribute('href')
                 
-                soup = BeautifulSoup(page.content(), 'html.parser')
-                found_count = 0
-                
-                for a in soup.find_all('a'):
-                    title = a.get_text().strip()
-                    link = a.get('href', '')
-                    
-                    # סינון בסיסי של לינקים שנראים כמו משרות
-                    if len(title) > 5 and any(x in link.lower() for x in ['job', 'position', 'careers', 'apply', 'gh_jid']):
-                        full_link = link if link.startswith('http') else url.split('/jobs')[0].rstrip('/') + '/' + link.lstrip('/')
-                        
-                        # סיווג למחלקה
-                        matched_dept = None
-                        title_lower = title.lower()
-                        for dept, keywords in DEPARTMENTS.items():
-                            if any(word in title_lower for word in keywords):
-                                matched_dept = dept
-                                break
-                        
-                        if matched_dept:
-                            # בדיקה אם המשרה כבר קיימת בזיכרון
-                            cursor.execute("SELECT id FROM jobs_cache WHERE link = ?", (full_link,))
-                            if cursor.fetchone() is None:
-                                # שמירה בדאטה-בייס
-                                cursor.execute("INSERT INTO jobs_cache (company_id, title, link) VALUES (?, ?, ?)", 
-                                               (comp_id, title, full_link))
-                                conn.commit()
-                                print(f"   ✨ Found New Job: {title} ({matched_dept})")
-                                found_count += 1
-                                
-                                # שליחת התראות למנויים רלוונטיים
-                                cursor.execute("""
-                                    SELECT u.email FROM users u 
-                                    JOIN subscriptions s ON u.id = s.user_id 
-                                    WHERE s.company_id = ? AND s.department = ?
-                                """, (comp_id, matched_dept))
-                                
-                                for (email,) in cursor.fetchall():
-                                    send_notification_email(email, title, comp_name, full_link, matched_dept)
-                
-                if found_count == 0:
-                    print(f"   😴 No new jobs found at {comp_name}.")
-                    
-            except Exception as e:
-                print(f"   ❌ Error scanning {comp_name}: {str(e)[:100]}...")
-            finally:
-                page.close()
-                
-        browser.close()
-    conn.close()
-    print(f"\n{'='*40}")
+                if txt and href and len(txt) > 3:
+                    keywords = ['engineer', 'developer', 'manager', 'specialist', 'student', 'support', 'designer']
+                    if any(k in txt.lower() for k in keywords):
+                        full_link = href if href.startswith('http') else url.rstrip('/') + href
+                        jobs.append({'title': txt.strip(), 'link': full_link, 'company': name})
+
+        print(f"   ✅ Found {len(jobs)} potential jobs at {name}.")
+        return jobs
+
+    except Exception as e:
+        print(f"   ❌ Error scanning {name}: {e}")
+        return []
+
+async def run_scraper_engine():
+    print("\n========================================")
+    print("🚀 Job Seeker Engine is starting...")
+    print("========================================")
+
+    if not SENDER_EMAIL or not SENDER_PASSWORD:
+        print("❌ ERROR: Could not load credentials via os.getenv")
+        # לא עוצרים כאן כדי לפחות לראות אם הסריקה עובדת, אבל המייל ייכשל
+    
+    companies = database.get_companies()
+    users = database.get_users()
+
+    if not companies:
+        print("😴 No companies to scan.")
+        return
+    if not users:
+        print("😴 No subscribers found.")
+        return
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        # User Agent
+        await page.set_extra_http_headers({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"})
+
+        all_new_jobs = []
+
+        for company in companies:
+            found_jobs = await scrape_company(page, company)
+            for job in found_jobs:
+                if not database.job_exists(job['link']):
+                    print(f"   ✨ New Job: {job['title']}")
+                    database.add_job(job['company_id'] if 'company_id' in job else 0, job['title'], job['link'])
+                    all_new_jobs.append(job)
+        
+        await browser.close()
+
+    if all_new_jobs:
+        print(f"\n📨 Sending updates to {len(users)} subscribers...")
+        for user in users:
+            # user[0] הוא המייל
+            await send_email(user[0], all_new_jobs)
+    else:
+        print("\n😴 No new jobs found this cycle.")
+
+    print("\n========================================")
     print("🏁 Scan Complete.")
-    print(f"{'='*40}")
-
-if __name__ == "__main__":
-    print("🚀 Server is starting on port 10000...")
-    app.run(host="0.0.0.0", port=10000)
+    print("========================================")
