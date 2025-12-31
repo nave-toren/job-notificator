@@ -3,160 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Seeker | 🔍</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Job Hunter Bot ☁️</title>
+    <style>
+        :root {
+            --primary: #6c5ce7; /* Neon Purple */
+            --bg-gradient: linear-gradient(135deg, #f5f6fa 0%, #dcdde1 100%);
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+        }
+        body {
+            font-family: -apple-system, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            margin: 0; padding: 20px;
+            display: flex; justify-content: center; min-height: 100vh; 
+        }
+        .container {
+            width: 100%; max-width: 600px;
+            background: var(--card-bg);
+            padding: 30px; border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #636e72; margin-bottom: 20px; font-size: 0.9em; }
+        
+        .alert { padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .success { background: #dff9fb; color: #22a6b3; }
+        .error { background: #fab1a0; color: #d63031; }
+
+        input, button { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #dfe6e9; box-sizing: border-box; }
+        .btn-primary { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-primary:hover { opacity: 0.9; }
+
+        .company-list { list-style: none; padding: 0; }
+        .company-item { background: #f1f2f6; padding: 10px; margin-bottom: 5px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .delete-btn { background: none; border: none; color: red; width: auto; cursor: pointer; }
+
+        .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+    </style>
 </head>
-<body class="bg-slate-50 font-sans p-4 md:p-12 text-slate-900 pb-24">
+<body>
+    <div class="container">
+        <h1>Job Hunter <span>SaaS</span> ☁️</h1>
+        <div class="subtitle">Cloud Edition • Powered by Neon DB</div>
 
-    <div class="max-w-6xl mx-auto space-y-10">
-        <div class="text-center">
-            <h1 class="text-5xl font-black text-indigo-600 tracking-tighter italic flex items-center justify-center gap-3">
-                <span>🔍</span> Job Seeker
-            </h1>
-            <p class="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Nave Toren Edition</p>
-        </div>
+        {% if success_message %} <div class="alert success">{{ success_message }}</div> {% endif %}
+        {% if error_message %} <div class="alert error">{{ error_message }}</div> {% endif %}
 
-        {% if success_message %}
-        <div id="success-msg" class="bg-green-100 border border-green-400 text-green-700 p-4 rounded-2xl text-center font-bold text-lg shadow-md max-w-2xl mx-auto animate-bounce">
-            ✅ {{ success_message }}
-        </div>
-        {% endif %}
-
-        {% if error_message %}
-        <div class="bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl text-center font-bold text-sm shadow-sm max-w-2xl mx-auto">
-            {{ error_message }}
-        </div>
-        {% endif %}
-
-        <div class="grid lg:grid-cols-2 gap-10">
-            
-            <div class="space-y-6">
-                
-                <div class="bg-white p-8 rounded-[2rem] shadow-lg border border-slate-100 relative overflow-hidden">
-                    <div class="absolute top-0 left-0 bg-emerald-100 text-emerald-800 text-[10px] font-black px-3 py-1 rounded-br-xl tracking-widest">STEP 1</div>
-                    
-                    <h3 class="font-bold text-2xl mb-2 text-slate-800">Add Targets</h3>
-                    <p class="text-slate-500 text-sm mb-6">Define which companies to track.</p>
-                    
-                    <p class="text-xs text-slate-500 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed">
-                        💡 <strong>Tip:</strong> Paste the direct link to the <u>Careers</u> or <u>Open Positions</u> page.<br>
-                        The URL usually contains words like "careers", "jobs", "positions".
-                    </p>
-
-                    <form action="/add" method="post" class="space-y-3">
-                        <input type="text" name="name" placeholder="Company Name (e.g. SolarEdge)" required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
-                        <input type="url" name="url" placeholder="https://company.com/careers/..." required class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
-                        <button class="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition shadow-md shadow-emerald-200">+ Add to List</button>
-                    </form>
-                </div>
-
-                <div class="bg-white p-8 rounded-[2rem] shadow-lg border border-slate-100">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-bold text-lg">Monitoring List</h3>
-                        <span class="text-xs font-bold px-3 py-1 bg-slate-100 rounded-full text-slate-500 border">
-                            {{ companies|length }} / 5 Used
-                        </span>
-                    </div>
-
-                    <div class="space-y-2 max-h-[300px] overflow-y-auto pr-2" id="list">
-                        {% if companies|length == 0 %}
-                            <div class="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                <p class="text-slate-400 text-sm">List is empty.</p>
-                                <p class="text-[10px] text-slate-300 uppercase font-bold mt-1">Add companies above</p>
-                            </div>
-                        {% endif %}
-
-                        {% for comp in companies %}
-                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border hover:border-indigo-200 transition group" id="item-{{ comp.id }}">
-                            <div class="flex flex-col overflow-hidden">
-                                <span class="font-bold text-sm text-slate-700">{{ comp.name }}</span>
-                                <a href="{{ comp.url }}" target="_blank" class="text-[10px] text-indigo-400 hover:underline truncate w-full max-w-[180px] block">{{ comp.url }}</a>
-                            </div>
-                            <button onclick="removeSource({{ comp.id }})" class="text-slate-300 group-hover:text-red-400 hover:!text-red-600 text-xs font-bold p-2 bg-white rounded-lg border border-slate-100 shadow-sm shrink-0 ml-2 transition">Remove</button>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
+        <form action="/" method="get" style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <label style="font-weight: bold; font-size: 0.9em;">🔑 Enter Email to View/Edit Your List:</label>
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                <input type="email" name="view_email" placeholder="your@email.com" value="{{ view_email if view_email else '' }}" required style="margin-bottom:0;">
+                <button type="submit" class="btn-primary" style="width: 100px; margin-bottom:0;">Go</button>
             </div>
+        </form>
 
-            <div class="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 h-fit relative overflow-hidden">
-                <div class="absolute top-0 left-0 bg-indigo-100 text-indigo-800 text-[10px] font-black px-3 py-1 rounded-br-xl tracking-widest">STEP 2</div>
-
-                <h2 class="text-2xl font-bold mb-2 flex items-center gap-2 text-slate-800">Set Alerts</h2>
-                <p class="text-slate-500 text-sm mb-6">Tell us where to send the new jobs.</p>
-
-                <form action="/subscribe" method="post" class="space-y-6">
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 uppercase ml-1 mb-1 block">Your Email</label>
-                        <input type="email" name="email" placeholder="name@example.com" required class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                    </div>
-                    
-                    <div class="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                        <p class="text-[10px] font-black uppercase text-indigo-600 mb-4 tracking-widest text-center">Filter by Interests</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="R&D" class="accent-indigo-600"> R&D / SW</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="Student" class="accent-indigo-600"> Student</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="Data" class="accent-indigo-600"> Data & AI</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="Product" class="accent-indigo-600"> Product</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="Marketing" class="accent-indigo-600"> Marketing</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="Sales & Biz" class="accent-indigo-600"> Sales & Biz</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="HR & Ops" class="accent-indigo-600"> HR & Ops</label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:text-indigo-600 transition"><input type="checkbox" name="departments" value="Finance & Legal" class="accent-indigo-600"> Finance</label>
-                        </div>
-                    </div>
-                    <button class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-indigo-700 hover:shadow-indigo-200 transition transform hover:-translate-y-1">ACTIVATE ALERTS 🚀</button>
-                </form>
-            </div>
-
-        </div>
-
-        <div class="mt-16 border-t pt-8 text-center pb-8">
-            <h4 class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Danger Zone</h4>
-            <form action="/unsubscribe" method="post" class="flex justify-center items-center gap-2 max-w-sm mx-auto opacity-40 hover:opacity-100 transition duration-300">
-                <input type="email" name="email" placeholder="Enter email to unsubscribe" required class="p-2 bg-slate-100 border rounded-lg text-xs w-full outline-none focus:border-red-300">
-                <button class="bg-slate-200 text-slate-500 text-xs font-bold px-4 py-2 rounded-lg hover:bg-red-500 hover:text-white transition whitespace-nowrap">Unsubscribe</button>
+        {% if view_email %}
+            <div class="section-title">1. Add Company (For {{ view_email }})</div>
+            <form action="/add" method="post">
+                <input type="hidden" name="user_email" value="{{ view_email }}">
+                <input type="text" name="name" placeholder="Company Name" required>
+                <input type="text" name="url" placeholder="Careers URL" required>
+                <button type="submit" class="btn-primary">+ Add to My List</button>
             </form>
-        </div>
 
+            <div class="section-title">My Tracking List ({{ companies|length }}/5)</div>
+            {% if companies %}
+                <ul class="company-list">
+                    {% for company in companies %}
+                    <li class="company-item">
+                        <strong>{{ company.name }}</strong>
+                        <form action="/delete-company" method="post" style="margin:0;">
+                            <input type="hidden" name="company_id" value="{{ company.id }}">
+                            <input type="hidden" name="user_email" value="{{ view_email }}">
+                            <button type="submit" class="delete-btn">Remove</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p style="text-align: center; color: #aaa;">Your list is empty.</p>
+            {% endif %}
+
+            <div class="section-title">2. Start Bot</div>
+            <form action="/subscribe" method="post">
+                <input type="hidden" name="email" value="{{ view_email }}">
+                <p style="font-size: 0.8em; color: #666;">Select interests (optional):</p>
+                <input type="text" name="departments" placeholder="Engineering, Product..." style="display:none;"> <button type="submit" class="btn-primary" style="background: #00b894;">🚀 Activate Alerts</button>
+            </form>
+
+        {% else %}
+            <div style="text-align: center; padding: 40px; color: #aaa;">
+                Please enter your email above to manage your private job hunter list.
+            </div>
+        {% endif %}
     </div>
-
-    <script>
-        // 1. Script to remove URL parameters (Cleaner URL)
-        // This fixes the bug where "Success" message persists after refresh
-        if (window.history.replaceState) {
-            const url = new URL(window.location);
-            if (url.searchParams.has('subscribed') || url.searchParams.has('unsubscribed')) {
-                url.searchParams.delete('subscribed');
-                url.searchParams.delete('unsubscribed');
-                window.history.replaceState(null, '', url);
-            }
-        }
-
-        // 2. Remove Company Logic
-        async function removeSource(id) {
-            if (!confirm('Are you sure you want to remove this company?')) return;
-            
-            const formData = new FormData();
-            formData.append('company_id', id);
-
-            try {
-                const res = await fetch('/delete-company', { 
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (res.ok || res.redirected) {
-                    const item = document.getElementById(`item-${id}`);
-                    if (item) item.remove();
-                    window.location.reload(); 
-                } else {
-                    alert('Failed to delete company');
-                }
-            } catch (e) { 
-                console.error(e);
-                alert('Error connecting to server'); 
-            }
-        }
-    </script>
 </body>
 </html>
