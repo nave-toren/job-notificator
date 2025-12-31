@@ -17,10 +17,9 @@ def startup_db():
 
 @app.get("/")
 async def index(request: Request, subscribed: bool = False, unsubscribed: bool = False, error_message: str = None, view_email: str = None):
-    # כברירת מחדל, לא מציגים אף חברה כדי לשמור על פרטיות
     my_companies = []
     
-    # אם המשתמש ביקש לראות את החברות שלו (הכניס מייל בחיפוש)
+    # הצגת חברות של משתמש ספציפי
     if view_email:
         my_companies = database.get_companies_by_user(view_email)
 
@@ -32,32 +31,31 @@ async def index(request: Request, subscribed: bool = False, unsubscribed: bool =
 
     return templates.TemplateResponse("index.html", {
         "request": request, 
-        "companies": my_companies, # מציג רק את החברות של המשתמש הנוכחי
-        "view_email": view_email,  # שומר את המייל שהוזן כדי להציג בטופס
+        "companies": my_companies,
+        "view_email": view_email, 
         "success_message": success_message,
         "error_message": error_message
     })
 
 @app.post("/add")
 async def add_company(request: Request, name: str = Form(...), url: str = Form(...), user_email: str = Form(...)):
-    # 1. בדיקת עומס (לפי משתמש ספציפי)
+    # 1. בדיקת עומס (מגבלה של 5 חברות למשתמש)
     user_companies = database.get_companies_by_user(user_email)
-    if len(user_companies) >= 5: # מגבלה של 5 חברות למשתמש
+    if len(user_companies) >= 5: 
         return RedirectResponse(
             url=f"/?view_email={user_email}&error_message=✋ Limit Reached. You have 5 companies. Delete one to add new.", 
             status_code=303
         )
 
-    # 2. בדיקת תקינות URL
-    valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "opportunities", "vacancy", "location"]
+    # 2. בדיקת תקינות URL (מונע הכנסת סתם אתרים)
+    valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "opportunities", "vacancy", "location", "about"]
     if not any(keyword in url.lower() for keyword in valid_keywords):
         return RedirectResponse(
-            url=f"/?view_email={user_email}&error_message=⚠️ Invalid URL. Must contain 'jobs', 'careers' etc.", 
+            url=f"/?view_email={user_email}&error_message=⚠️ Invalid URL. Link must be a Career page.", 
             status_code=303
         )
 
     database.add_company(name, url, user_email)
-    # חוזרים לדף הראשי אבל עם המייל של המשתמש כדי שיראה את הרשימה המעודכנת שלו
     return RedirectResponse(url=f"/?view_email={user_email}", status_code=303)
 
 @app.post("/subscribe")
@@ -66,13 +64,13 @@ async def subscribe(
     email: str = Form(...),
     departments: List[str] = Form(default=[]) 
 ):
+    # שומר את האינטרסים של המשתמש כמחרוזת בנאון
     interests_str = ",".join(departments)
     database.add_user(email, interests_str)
     
-    # הפעלת הסריקה
+    # מפעיל סריקה ברקע
     background_tasks.add_task(run_scraper_engine)
     
-    # החזרת המשתמש לדף שלו
     return RedirectResponse(url=f"/?subscribed=true&view_email={email}", status_code=303)
 
 @app.post("/unsubscribe")
@@ -84,8 +82,3 @@ async def unsubscribe(email: str = Form(...)):
 async def delete_company(company_id: int = Form(...), user_email: str = Form(...)):
     database.delete_company(company_id, user_email)
     return RedirectResponse(url=f"/?view_email={user_email}", status_code=303)
-
-@app.get("/scan")
-async def trigger_scan(background_tasks: BackgroundTasks):
-    background_tasks.add_task(run_scraper_engine)
-    return {"status": "Scan started in background"}

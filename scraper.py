@@ -15,15 +15,30 @@ SENDER_EMAIL = os.getenv("EMAIL_USER")
 SENDER_PASSWORD = os.getenv("EMAIL_PASSWORD")
 DISPLAY_NAME = "Job Hunter Bot 🤖"
 
-# --- מילות מפתח לסיווג ---
+# --- מילות מפתח לסיווג (עבור המייל) ---
 CATEGORY_KEYWORDS = {
-    "Engineering": ['engineer', 'developer', 'r&d', 'data', 'algorithm', 'architect', 'full stack', 'backend', 'frontend', 'mobile', 'devops'],
-    "Product": ['product', 'design', 'ux', 'ui', 'creative', 'art director'],
-    "Marketing": ['marketing', 'sales', 'account', 'business development', 'sdr', 'bdr', 'content', 'seo', 'ppc'],
+    "Engineering": ['engineer', 'developer', 'r&d', 'data', 'algorithm', 'architect', 'full stack', 'backend', 'frontend', 'mobile', 'devops', 'software'],
+    "Product": ['product', 'design', 'ux', 'ui', 'creative', 'head of product'],
+    "Marketing": ['marketing', 'sales', 'account', 'business', 'sdr', 'bdr', 'content', 'seo', 'ppc', 'growth'],
     "Finance": ['finance', 'legal', 'accountant', 'bookkeeper', 'controller', 'payroll', 'attorney', 'counsel'],
-    "HR": ['hr', 'human resources', 'recruiter', 'talent', 'people', 'admin', 'office manager', 'operations'],
+    "HR": ['hr', 'human resources', 'recruiter', 'talent', 'people', 'admin', 'office', 'operations'],
     "Support": ['support', 'customer', 'success', 'service', 'helpdesk', 'qa', 'quality', 'tier']
 }
+
+# --- רשימות סינון לסורק (כדי למנוע זבל) ---
+# 1. מילים שחייבות להופיע (אחת מהן לפחות)
+VALID_JOB_KEYWORDS = [
+    'engineer', 'developer', 'data', 'manager', 'specialist', 'student', 'support', 'qa', 'analyst', 
+    'lead', 'head', 'product', 'designer', 'finance', 'accountant', 'hr', 'recruiter', 'sales', 
+    'officer', 'coordinator', 'consultant', 'associate', 'director', 'intern'
+]
+
+# 2. מילים שאסור שיופיעו (מסננות כתבות, פוטר, לוגין וכו')
+JUNK_KEYWORDS = [
+    'privacy', 'policy', 'terms', 'cookie', 'login', 'signin', 'signup', 'forgot', 'blog', 'news', 
+    'press', 'about us', 'contact', 'facebook', 'twitter', 'linkedin', 'instagram', 'read more', 
+    'share', 'events', 'portal', 'sitemap', 'accessibility', 'investor'
+]
 
 def classify_job(title):
     title_lower = title.lower()
@@ -34,10 +49,6 @@ def classify_job(title):
 
 async def send_email(to_email, user_interests, new_jobs):
     if not new_jobs:
-        return
-
-    if not SENDER_EMAIL or not SENDER_PASSWORD:
-        print("❌ CRITICAL: Missing EMAIL keys in .env")
         return
 
     # המרת מחרוזת האינטרסים לרשימה
@@ -54,21 +65,20 @@ async def send_email(to_email, user_interests, new_jobs):
         
         # לוגיקת סינון: מציגים אם המשתמש בחר את הקטגוריה, או אם לא בחר כלום (מראה הכל)
         is_relevant = False
-        if not user_interest_list: 
+        if not user_interest_list or user_interest_list == ['']: 
             is_relevant = True
         elif category in user_interest_list:
             is_relevant = True
-        elif category == "Other" and "Other" in user_interest_list: # אופציונלי
-            is_relevant = True
+        # אופציונלי: אפשר להחליט אם להראות 'Other' תמיד או לא
             
         if is_relevant:
              grouped_jobs[category].append(job)
              jobs_count_for_user += 1
 
     if jobs_count_for_user == 0:
-        return # אין משרות שרלוונטיות למשתמש הזה
+        return 
 
-    # --- בניית ה-HTML ---
+    # --- בניית ה-HTML למייל ---
     subject = f"🚀 {jobs_count_for_user} New Jobs Found For You!"
     
     jobs_html = ""
@@ -151,10 +161,16 @@ async def scrape_company(page, company_row):
             txt = await link.inner_text()
             href = await link.get_attribute('href')
             
+            # --- הלוגיקה החדשה והחכמה לסינון זבל ---
             if txt and href and len(txt) > 3:
-                # רשימת מילות מפתח מורחבת לתפיסה רחבה של משרות
-                keywords = ['engineer', 'developer', 'data', 'manager', 'specialist', 'student', 'support', 'qa', 'analyst', 'lead', 'head', 'product', 'designer', 'finance', 'accountant', 'hr', 'recruiter', 'sales', 'officer', 'coordinator']
-                if any(k in txt.lower() for k in keywords):
+                txt_lower = txt.lower()
+                
+                # 1. בדיקה: האם זה זבל?
+                if any(junk in txt_lower for junk in JUNK_KEYWORDS):
+                    continue # דלג ללינק הבא
+                
+                # 2. בדיקה: האם זה מכיל מילת מפתח חיובית?
+                if any(valid in txt_lower for valid in VALID_JOB_KEYWORDS):
                     full_link = href if href.startswith('http') else url.rstrip('/') + href
                     
                     jobs.append({
@@ -174,7 +190,6 @@ async def scrape_company(page, company_row):
 async def run_scraper_engine():
     print("🚀 Starting Job Scraper...")
     
-    # --- התיקון כאן: הוספנו "companies =" בהתחלה ---
     companies = database.get_all_companies_for_scan()
     users = database.get_users()
 
@@ -192,6 +207,7 @@ async def run_scraper_engine():
             found_jobs = await scrape_company(page, company)
             
             for job in found_jobs:
+                # בדיקה כפולה: האם המשרה קיימת בזיכרון של נאון?
                 if not database.job_exists(job['link']):
                     print(f"   ✨ NEW: {job['title']}")
                     database.add_job(job['company_id'], job['title'], job['link'])
@@ -202,9 +218,6 @@ async def run_scraper_engine():
     # שליחת מיילים
     if all_new_jobs_for_report and users:
         print(f"\n📨 Processing emails for {len(users)} subscribers...")
-        # כאן צריך לוודא ששולחים למשתמש רק את המשרות של החברות שלו
-        # כרגע הקוד שולח את *כל* המשרות החדשות לכל המשתמשים.
-        # לגרסת בטא זה בסדר, אבל בעתיד נרצה לסנן גם כאן.
         for user_row in users:
             email = user_row['email']
             interests = user_row['interests']
