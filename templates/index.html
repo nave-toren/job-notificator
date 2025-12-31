@@ -3,100 +3,315 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Hunter Bot ☁️</title>
+    <title>Career Agent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #6c5ce7; /* Neon Purple */
-            --bg-gradient: linear-gradient(135deg, #f5f6fa 0%, #dcdde1 100%);
+            --primary: #ff7e5f;
+            --primary-hover: #eb5e3e;
+            --bg-gradient: linear-gradient(135deg, #fff1eb 0%, #ffd1c4 100%);
             --card-bg: #ffffff;
-            --text-main: #2d3436;
+            --text-dark: #2d3436;
+            --text-light: #636e72;
+            --radius: 16px;
         }
+
         body {
-            font-family: -apple-system, sans-serif;
+            font-family: 'Poppins', sans-serif;
             background: var(--bg-gradient);
-            color: var(--text-main);
-            margin: 0; padding: 20px;
-            display: flex; justify-content: center; min-height: 100vh; 
+            color: var(--text-dark);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
+
         .container {
-            width: 100%; max-width: 600px;
+            width: 100%;
+            max-width: 600px;
             background: var(--card-bg);
-            padding: 30px; border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 40px;
+            border-radius: var(--radius);
+            box-shadow: 0 20px 60px rgba(255, 126, 95, 0.15);
+            animation: slideUp 0.6s ease-out;
         }
-        h1 { text-align: center; color: var(--primary); margin-bottom: 5px; }
-        .subtitle { text-align: center; color: #636e72; margin-bottom: 20px; font-size: 0.9em; }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- Header --- */
+        header { text-align: center; margin-bottom: 30px; }
         
-        .alert { padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
-        .success { background: #dff9fb; color: #22a6b3; }
-        .error { background: #fab1a0; color: #d63031; }
+        h1 {
+            font-size: 2.5rem;
+            margin: 0;
+            background: linear-gradient(to right, #ff7e5f, #feb47b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
 
-        input, button { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #dfe6e9; box-sizing: border-box; }
-        .btn-primary { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
-        .btn-primary:hover { opacity: 0.9; }
+        .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-top: 5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
 
-        .company-list { list-style: none; padding: 0; }
-        .company-item { background: #f1f2f6; padding: 10px; margin-bottom: 5px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .delete-btn { background: none; border: none; color: red; width: auto; cursor: pointer; }
+        /* --- Alerts --- */
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .success { background: #dff9fb; color: #22a6b3; border: 1px solid #c7ecee; }
+        .error { background: #fab1a0; color: #d63031; border: 1px solid #ff7675; }
 
-        .section-title { font-weight: bold; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        /* --- Forms & Inputs --- */
+        .form-section { margin-bottom: 30px; }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+        }
+
+        input[type="text"], input[type="email"], input[type="url"] {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #f1f2f6;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #fffafa;
+        }
+
+        /* --- Buttons --- */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 126, 95, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-delete {
+            background: #ffeaa7;
+            color: #d63031;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            border-radius: 8px;
+            width: auto;
+        }
+
+        /* --- Identity Section (Top) --- */
+        .identity-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #e9ecef;
+            margin-bottom: 30px;
+        }
+
+        /* --- Companies List --- */
+        .company-list { list-style: none; padding: 0; margin: 15px 0; }
+        .company-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            border: 1px solid #f1f2f6;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .company-name { font-weight: 600; }
+
+        /* --- Departments Grid --- */
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .dept-option {
+            position: relative;
+        }
+
+        .dept-option input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .dept-label {
+            display: block;
+            padding: 12px;
+            background: #f1f2f6;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+            color: var(--text-light);
+        }
+
+        /* Style when checked */
+        .dept-option input:checked + .dept-label {
+            background: #fff0eb;
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .dept-option:hover .dept-label { background: #e3e6f0; }
+
+        /* --- Helper Text --- */
+        .limit-text { font-size: 0.8rem; color: #b2bec3; text-align: right; margin-top: 5px; }
+
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Job Hunter <span>SaaS</span> ☁️</h1>
-        <div class="subtitle">Cloud Edition • Powered by Neon DB</div>
 
-        {% if success_message %} <div class="alert success">{{ success_message }}</div> {% endif %}
-        {% if error_message %} <div class="alert error">{{ error_message }}</div> {% endif %}
+<div class="container">
+    <header>
+        <h1>Career Agent</h1>
+        <div class="subtitle">by Nave Toren</div>
+    </header>
 
-        <form action="/" method="get" style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-            <label style="font-weight: bold; font-size: 0.9em;">🔑 Enter Email to View/Edit Your List:</label>
-            <div style="display: flex; gap: 10px; margin-top: 5px;">
-                <input type="email" name="view_email" placeholder="your@email.com" value="{{ view_email if view_email else '' }}" required style="margin-bottom:0;">
-                <button type="submit" class="btn-primary" style="width: 100px; margin-bottom:0;">Go</button>
+    {% if success_message %}
+        <div class="alert success">✨ {{ success_message }}</div>
+    {% endif %}
+    {% if error_message %}
+        <div class="alert error">⚠️ {{ error_message }}</div>
+    {% endif %}
+
+    <div class="identity-box">
+        <form action="/" method="get">
+            <label style="text-align: left;">YOUR EMAIL</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="email" name="view_email" placeholder="Enter email to manage agent..." value="{{ view_email if view_email else '' }}" required>
+                <button type="submit" class="btn btn-primary" style="width: auto;">Load</button>
             </div>
         </form>
+    </div>
 
-        {% if view_email %}
-            <div class="section-title">1. Add Company (For {{ view_email }})</div>
-            <form action="/add" method="post">
-                <input type="hidden" name="user_email" value="{{ view_email }}">
-                <input type="text" name="name" placeholder="Company Name" required>
-                <input type="text" name="url" placeholder="Careers URL" required>
-                <button type="submit" class="btn-primary">+ Add to My List</button>
-            </form>
+    {% if view_email %}
+    
+    <hr style="border: 0; border-top: 1px dashed #dfe6e9; margin: 30px 0;">
 
-            <div class="section-title">My Tracking List ({{ companies|length }}/5)</div>
-            {% if companies %}
-                <ul class="company-list">
-                    {% for company in companies %}
-                    <li class="company-item">
-                        <strong>{{ company.name }}</strong>
-                        <form action="/delete-company" method="post" style="margin:0;">
-                            <input type="hidden" name="company_id" value="{{ company.id }}">
-                            <input type="hidden" name="user_email" value="{{ view_email }}">
-                            <button type="submit" class="delete-btn">Remove</button>
-                        </form>
-                    </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p style="text-align: center; color: #aaa;">Your list is empty.</p>
-            {% endif %}
-
-            <div class="section-title">2. Start Bot</div>
-            <form action="/subscribe" method="post">
-                <input type="hidden" name="email" value="{{ view_email }}">
-                <p style="font-size: 0.8em; color: #666;">Select interests (optional):</p>
-                <input type="text" name="departments" placeholder="Engineering, Product..." style="display:none;"> <button type="submit" class="btn-primary" style="background: #00b894;">🚀 Activate Alerts</button>
-            </form>
-
+    <div class="form-section">
+        <label>YOUR TARGET COMPANIES <span style="font-weight: 400; color: #b2bec3;">(Max 5)</span></label>
+        
+        {% if companies %}
+            <ul class="company-list">
+                {% for company in companies %}
+                <li class="company-item">
+                    <span class="company-name">{{ company.name }}</span>
+                    <form action="/delete-company" method="post" style="margin:0;">
+                        <input type="hidden" name="company_id" value="{{ company.id }}">
+                        <input type="hidden" name="user_email" value="{{ view_email }}">
+                        <button type="submit" class="btn btn-delete">Remove</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
         {% else %}
-            <div style="text-align: center; padding: 40px; color: #aaa;">
-                Please enter your email above to manage your private job hunter list.
+            <div style="text-align: center; color: #b2bec3; margin: 15px 0; font-style: italic;">No companies added yet.</div>
+        {% endif %}
+
+        {% if companies|length < 5 %}
+        <form action="/add" method="post" style="margin-top: 15px;">
+            <input type="hidden" name="user_email" value="{{ view_email }}">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                <input type="text" name="name" placeholder="Name (e.g. Wix)" required>
+                <input type="url" name="url" placeholder="Careers URL" required>
             </div>
+            <button type="submit" class="btn btn-primary" style="background: var(--text-dark);">+ Add Company</button>
+        </form>
+        {% else %}
+            <div class="limit-text">Target limit reached (5/5). Delete one to add new.</div>
         {% endif %}
     </div>
+
+    <hr style="border: 0; border-top: 1px dashed #dfe6e9; margin: 30px 0;">
+
+    <div class="form-section">
+        <label>FILTER DEPARTMENTS</label>
+        <form action="/subscribe" method="post">
+            <input type="hidden" name="email" value="{{ view_email }}">
+            
+            <div class="checkbox-grid">
+                <div class="dept-option">
+                    <input type="checkbox" name="departments" value="Engineering" id="rd">
+                    <label class="dept-label" for="rd">💻 R&D / Dev</label>
+                </div>
+                <div class="dept-option">
+                    <input type="checkbox" name="departments" value="Product" id="prod">
+                    <label class="dept-label" for="prod">🎨 Product & UX</label>
+                </div>
+                <div class="dept-option">
+                    <input type="checkbox" name="departments" value="Marketing" id="mkt">
+                    <label class="dept-label" for="mkt">📈 Marketing</label>
+                </div>
+                <div class="dept-option">
+                    <input type="checkbox" name="departments" value="Finance" id="fin">
+                    <label class="dept-label" for="fin">💰 Finance & Legal</label>
+                </div>
+                <div class="dept-option">
+                    <input type="checkbox" name="departments" value="HR" id="hr">
+                    <label class="dept-label" for="hr">🤝 HR & Ops</label>
+                </div>
+                <div class="dept-option">
+                    <input type="checkbox" name="departments" value="Support" id="sup">
+                    <label class="dept-label" for="sup">🎧 Support / QA</label>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save & Start Agent 🚀</button>
+        </form>
+    </div>
+
+    {% endif %}
+
+</div>
+
 </body>
 </html>
