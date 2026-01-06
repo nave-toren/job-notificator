@@ -10,22 +10,18 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db_connection():
-    # פונקציה פשוטה שמנסה להתחבר
-    # אנחנו מסתמכים על ה-URL בקובץ .env שמכיל כבר את ה-sslmode
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    # הוספנו את sslmode='require' כדי להכריח חיבור מאובטח
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor, sslmode='require')
     return conn
 
 def init_db():
     print("⏳ Connecting to Neon DB...")
-    
-    # --- מנגנון ניסיונות חוזרים (Retry Loop) ---
     max_retries = 3
     for attempt in range(max_retries):
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # יצירת טבלאות
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS companies (
                     id SERIAL PRIMARY KEY,
@@ -35,11 +31,13 @@ def init_db():
                 );
             ''')
             
+            # השינוי כאן: הוספת is_new_user
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
-                    interests TEXT
+                    interests TEXT,
+                    is_new_user BOOLEAN DEFAULT TRUE
                 );
             ''')
 
@@ -57,14 +55,13 @@ def init_db():
             conn.commit()
             conn.close()
             print("✅ Connected to Neon PostgreSQL DB & Tables Ready.")
-            return # יציאה מהפונקציה בהצלחה
+            return 
             
         except Exception as e:
-            print(f"⚠️ Attempt {attempt+1}/{max_retries} failed. Neon might be sleeping...")
-            print(f"   Error: {e}")
-            time.sleep(2) # מחכים 2 שניות ונותנים לשרת זמן להתעורר
+            print(f"⚠️ Attempt {attempt+1}/{max_retries} failed. Error: {e}")
+            time.sleep(2)
 
-    print("💀 Critical Error: Could not connect to DB after 3 attempts.")
+    print("💀 Critical Error: Could not connect to DB.")
 
 # --- Companies ---
 def get_companies_by_user(user_email):
@@ -113,10 +110,23 @@ def add_user(email, interests_str=""):
         if cursor.fetchone():
             cursor.execute('UPDATE users SET interests = %s WHERE email = %s', (interests_str, email))
         else:
-            cursor.execute('INSERT INTO users (email, interests) VALUES (%s, %s)', (email, interests_str))
+            # ברירת מחדל: משתמש חדש
+            cursor.execute('INSERT INTO users (email, interests, is_new_user) VALUES (%s, %s, TRUE)', (email, interests_str))
         conn.commit()
     except Exception as e:
         print(f"Error adding/updating user: {e}")
+    finally:
+        conn.close()
+
+def mark_user_as_not_new(email):
+    """ מסמן שהמשתמש קיבל את המייל הראשון שלו """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('UPDATE users SET is_new_user = FALSE WHERE email = %s', (email,))
+        conn.commit()
+    except Exception as e:
+        print(f"Error updating user status: {e}")
     finally:
         conn.close()
 
@@ -130,7 +140,7 @@ def remove_user(email):
 def get_users():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT email, interests FROM users')
+    cursor.execute('SELECT * FROM users')
     users = cursor.fetchall()
     conn.close()
     return users

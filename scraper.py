@@ -9,35 +9,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# הגדרות SMTP
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = os.getenv("EMAIL_USER")
 SENDER_PASSWORD = os.getenv("EMAIL_PASSWORD")
 DISPLAY_NAME = "Job Hunter Bot 🤖"
 
-# --- מילות מפתח לסיווג (עבור המייל) ---
+# מילות מפתח לסינון קטגוריות
 CATEGORY_KEYWORDS = {
-    "Engineering": ['engineer', 'developer', 'r&d', 'data', 'algorithm', 'architect', 'full stack', 'backend', 'frontend', 'mobile', 'devops', 'software'],
+    "Engineering": ['engineer', 'developer', 'r&d', 'data', 'algorithm', 'architect', 'full stack', 'backend', 'frontend', 'mobile', 'devops', 'software', 'qa', 'cyber'],
     "Product": ['product', 'design', 'ux', 'ui', 'creative', 'head of product'],
     "Marketing": ['marketing', 'sales', 'account', 'business', 'sdr', 'bdr', 'content', 'seo', 'ppc', 'growth'],
-    "Finance": ['finance', 'legal', 'accountant', 'bookkeeper', 'controller', 'payroll', 'attorney', 'counsel'],
+    "Finance": ['finance', 'legal', 'accountant', 'bookkeeper', 'controller', 'payroll', 'attorney', 'counsel', 'economist'],
     "HR": ['hr', 'human resources', 'recruiter', 'talent', 'people', 'admin', 'office', 'operations'],
-    "Support": ['support', 'customer', 'success', 'service', 'helpdesk', 'qa', 'quality', 'tier']
+    "Support": ['support', 'customer', 'success', 'service', 'helpdesk', 'tier']
 }
 
-# --- רשימות סינון לסורק (כדי למנוע זבל) ---
-# 1. מילים שחייבות להופיע (אחת מהן לפחות)
-VALID_JOB_KEYWORDS = [
-    'engineer', 'developer', 'data', 'manager', 'specialist', 'student', 'support', 'qa', 'analyst', 
-    'lead', 'head', 'product', 'designer', 'finance', 'accountant', 'hr', 'recruiter', 'sales', 
-    'officer', 'coordinator', 'consultant', 'associate', 'director', 'intern'
-]
-
-# 2. מילים שאסור שיופיעו (מסננות כתבות, פוטר, לוגין וכו')
 JUNK_KEYWORDS = [
     'privacy', 'policy', 'terms', 'cookie', 'login', 'signin', 'signup', 'forgot', 'blog', 'news', 
-    'press', 'about us', 'contact', 'facebook', 'twitter', 'linkedin', 'instagram', 'read more', 
-    'share', 'events', 'portal', 'sitemap', 'accessibility', 'investor'
+    'press', 'about us', 'contact', 'facebook', 'twitter', 'linkedin', 'instagram', 'investor'
 ]
 
 def classify_job(title):
@@ -47,84 +38,52 @@ def classify_job(title):
             return category
     return "Other"
 
-async def send_email(to_email, user_interests, new_jobs):
-    if not new_jobs:
+async def send_email(to_email, user_interests, jobs_list, is_first_email=False):
+    """ שולח מייל עם רשימת המשרות שנמצאו עבור המשתמש """
+    if not jobs_list:
         return
 
-    # המרת מחרוזת האינטרסים לרשימה
+    # סינון לפי קטגוריות שהמשתמש בחר
     user_interest_list = user_interests.split(',') if user_interests else []
-    
-    # מיון המשרות לפי קטגוריות
-    grouped_jobs = {cat: [] for cat in CATEGORY_KEYWORDS.keys()}
-    grouped_jobs["Other"] = []
+    relevant_jobs = []
 
-    jobs_count_for_user = 0
-
-    for job in new_jobs:
-        category = classify_job(job['title'])
-        
-        # לוגיקת סינון: מציגים אם המשתמש בחר את הקטגוריה, או אם לא בחר כלום (מראה הכל)
-        is_relevant = False
-        if not user_interest_list or user_interest_list == ['']: 
-            is_relevant = True
-        elif category in user_interest_list:
-            is_relevant = True
-        # אופציונלי: אפשר להחליט אם להראות 'Other' תמיד או לא
+    for job in jobs_list:
+        cat = classify_job(job['title'])
+        # אם המשתמש לא בחר כלום, או שהקטגוריה ברשימה שלו
+        if not user_interest_list or user_interest_list == [''] or cat in user_interest_list:
+            relevant_jobs.append(job)
             
-        if is_relevant:
-             grouped_jobs[category].append(job)
-             jobs_count_for_user += 1
+    if not relevant_jobs:
+        return
 
-    if jobs_count_for_user == 0:
-        return 
-
-    # --- בניית ה-HTML למייל ---
-    subject = f"🚀 {jobs_count_for_user} New Jobs Found For You!"
+    # כותרת המייל
+    title_text = "👋 Welcome! Here are ALL open positions for you" if is_first_email else "🚀 New Jobs Found!"
     
-    jobs_html = ""
-    for cat_name, jobs in grouped_jobs.items():
-        if jobs:
-            jobs_html += f"""
-            <div style="margin-top: 25px; margin-bottom: 10px;">
-                <h3 style="color: #2d3436; border-bottom: 2px solid #ff7e5f; display: inline-block; padding-bottom: 3px; margin: 0;">
-                    {cat_name}
-                </h3>
-            </div>
-            <ul style="list-style-type: none; padding: 0;">
-            """
-            for job in jobs:
-                jobs_html += f"""
-                <li style="margin-bottom: 10px; padding-left: 10px; border-left: 3px solid #dfe6e9; background: #fdfdfd; padding: 8px;">
-                    <a href='{job['link']}' style='color: #0984e3; text-decoration: none; font-weight: bold; font-size: 16px; display: block;'>{job['title']}</a>
-                    <div style="font-size: 13px; color: #636e72; margin-top: 3px;">at {job['company']}</div>
-                </li>
-                """
-            jobs_html += "</ul>"
+    # בניית גוף המייל
+    jobs_html = "<ul style='padding: 0; list-style-type: none;'>"
+    for job in relevant_jobs:
+        jobs_html += f"""
+        <li style="margin-bottom: 12px; padding: 10px; border-left: 4px solid #ff7e5f; background: #f9f9f9; border-radius: 4px;">
+            <a href='{job['link']}' style='font-weight: bold; text-decoration: none; color: #0984e3; font-size: 16px;'>{job['title']}</a>
+            <div style="font-size: 13px; color: #555; margin-top: 4px;">🏢 <strong>{job['company']}</strong></div>
+        </li>
+        """
+    jobs_html += "</ul>"
 
     body = f"""
-    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 12px; border: 1px solid #eee; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
-        <h2 style="color: #2d3436; text-align: center; margin-top: 0;">We found new opportunities!</h2>
-        <p style="text-align: center; color: #636e72;">Based on your preferences: <strong>{user_interests if user_interests else 'All Categories'}</strong></p>
-        
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 8px;">
+        <h2 style="color: #2d3436; text-align: center;">{title_text}</h2>
+        <p style="text-align: center; color: #666;">Showing {len(relevant_jobs)} jobs matching your interests.</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
         {jobs_html}
-        
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
-        
-        <p style="font-size: 14px; color: #555; line-height: 1.6; text-align: center; font-style: italic; background: #f1f2f6; padding: 15px; border-radius: 8px;">
-            "Our bot never sleeps! 🤖 It keeps hunting for jobs 24/7 so you can go play 
-            <strong>Matkot at the beach</strong> 🏖️ or do something fun."
-        </p>
-        
-        <div style="margin-top: 30px; font-size: 12px; color: #999; text-align: center;">
-            Created by <strong>Nave Toren</strong> | Job Hunter Bot
-        </div>
+        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center;">Job Hunter Bot 🤖 | Built by Nave Toren</p>
     </div>
     """
 
     msg = MIMEMultipart()
     msg['From'] = f"{DISPLAY_NAME} <{SENDER_EMAIL}>"
     msg['To'] = to_email
-    msg['Subject'] = subject
+    msg['Subject'] = f"🎯 {len(relevant_jobs)} Opportunities found for you!"
     msg.attach(MIMEText(body, 'html'))
 
     try:
@@ -133,94 +92,129 @@ async def send_email(to_email, user_interests, new_jobs):
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
         server.quit()
-        print(f"📧 Email sent to {to_email}")
+        print(f"📧 Sent email to {to_email}")
     except Exception as e:
-        print(f"❌ Failed to send email: {e}")
+        print(f"❌ Email failed to {to_email}: {e}")
 
 async def scrape_company(page, company_row):
-    c_id = company_row['id']
-    name = company_row['name']
+    """ סורק חברה ומחזיר את כל המשרות שנמצאו בה כרגע """
     url = company_row['careers_url']
+    name = company_row['name']
+    c_id = company_row['id']
     
-    print(f"\n🔎 Scanning {name}...")
+    print(f"🔎 Scanning {name}...")
+    found_jobs = []
 
     try:
         await page.goto(url, timeout=60000)
         try:
             await page.wait_for_load_state('networkidle', timeout=10000)
-        except:
-            pass 
+        except: pass
         
+        # גלילה למטה לטעינת כל התוכן
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         await asyncio.sleep(2)
 
-        jobs = []
         links = await page.query_selector_all('a')
-        
+        seen_links = set() # למניעת כפילויות באותו עמוד
+
         for link in links:
             txt = await link.inner_text()
             href = await link.get_attribute('href')
             
-            # --- הלוגיקה החדשה והחכמה לסינון זבל ---
             if txt and href and len(txt) > 3:
                 txt_lower = txt.lower()
+                if any(junk in txt_lower for junk in JUNK_KEYWORDS): continue
                 
-                # 1. בדיקה: האם זה זבל?
-                if any(junk in txt_lower for junk in JUNK_KEYWORDS):
-                    continue # דלג ללינק הבא
+                # בניית לינק מלא
+                full_link = href if href.startswith('http') else url.rstrip('/') + href
                 
-                # 2. בדיקה: האם זה מכיל מילת מפתח חיובית?
-                if any(valid in txt_lower for valid in VALID_JOB_KEYWORDS):
-                    full_link = href if href.startswith('http') else url.rstrip('/') + href
-                    
-                    jobs.append({
+                if full_link not in seen_links:
+                    seen_links.add(full_link)
+                    found_jobs.append({
                         'company_id': c_id,
                         'company': name,
                         'title': txt.strip(),
                         'link': full_link
                     })
-
-        print(f"   ✅ Found {len(jobs)} potential links at {name}.")
-        return jobs
-
+                
     except Exception as e:
-        print(f"   ❌ Error scanning {name}: {e}")
-        return []
+        print(f"❌ Error scanning {name}: {e}")
+        
+    return found_jobs
 
 async def run_scraper_engine():
-    print("🚀 Starting Job Scraper...")
+    print("🚀 Starting Smart Scraper...")
     
     companies = database.get_all_companies_for_scan()
     users = database.get_users()
-
+    
     if not companies:
         print("😴 No companies to scan.")
         return
 
+    # מילון לאחסון כל המשרות החיות שנמצאו בסריקה הזו
+    # Key: Company ID, Value: List of jobs
+    jobs_by_company = {}
+    
+    # סט לשמירת לינקים שהם חדשים גלובלית (נוספו ל-DB היום)
+    globally_new_links = set()
+
+    # --- שלב 1: איסוף כל המשרות מהשטח ---
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         
-        all_new_jobs_for_report = []
-
         for company in companies:
-            found_jobs = await scrape_company(page, company)
+            c_id = company['id']
+            jobs = await scrape_company(page, company)
+            jobs_by_company[c_id] = jobs
             
-            for job in found_jobs:
-                # בדיקה כפולה: האם המשרה קיימת בזיכרון של נאון?
+            # בדיקה האם המשרות חדשות ב-DB
+            for job in jobs:
                 if not database.job_exists(job['link']):
-                    print(f"   ✨ NEW: {job['title']}")
-                    database.add_job(job['company_id'], job['title'], job['link'])
-                    all_new_jobs_for_report.append(job)
+                    # משרה חדשה שלא ראינו מעולם!
+                    database.add_job(c_id, job['title'], job['link'])
+                    globally_new_links.add(job['link'])
         
         await browser.close()
 
-    # שליחת מיילים
-    if all_new_jobs_for_report and users:
-        print(f"\n📨 Processing emails for {len(users)} subscribers...")
-        for user_row in users:
-            email = user_row['email']
-            interests = user_row['interests']
-            await send_email(email, interests, all_new_jobs_for_report)
-    else:
-        print("\n😴 No new jobs found this cycle.")
+    # --- שלב 2: הפצת מיילים מותאמת אישית ---
+    print(f"\n📨 Processing emails for {len(users)} users...")
+    
+    for user in users:
+        email = user['email']
+        is_new_user = user.get('is_new_user', False)
+        interests = user['interests']
+        
+        # איזה חברות המשתמש הזה רוצה?
+        user_companies = database.get_companies_by_user(email)
+        user_company_ids = [c['id'] for c in user_companies]
+        
+        jobs_to_send = []
+        
+        for c_id in user_company_ids:
+            # שלוף את המשרות שמצאנו הרגע בחברה הזו
+            company_jobs = jobs_by_company.get(c_id, [])
+            
+            for job in company_jobs:
+                if is_new_user:
+                    # למשתמש חדש - שולחים הכל (כל מה שחי באתר)
+                    jobs_to_send.append(job)
+                else:
+                    # למשתמש ותיק - שולחים רק אם זה חדש גלובלית
+                    if job['link'] in globally_new_links:
+                        jobs_to_send.append(job)
+        
+        # שליחת המייל
+        if jobs_to_send:
+            await send_email(email, interests, jobs_to_send, is_first_email=is_new_user)
+            
+            # עדכון סטטוס המשתמש
+            if is_new_user:
+                database.mark_user_as_not_new(email)
+                print(f"✅ User {email} welcomed and marked as regular.")
+        else:
+            print(f"🤷‍♂️ No relevant updates for {email}")
+
+    print("🏁 Scraper finished successfully.")
