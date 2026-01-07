@@ -39,66 +39,51 @@ def classify_job(title):
             return category
     return "Other"
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+
 async def send_email(to_email, user_interests, jobs_list, is_first_email=False):
-    """ שולח מייל עם רשימת המשרות שנמצאו עבור המשתמש """
-    if not jobs_list:
-        return
-
-    # סינון לפי קטגוריות שהמשתמש בחר
-    user_interest_list = user_interests.split(',') if user_interests else []
-    relevant_jobs = []
-
-    for job in jobs_list:
-        cat = classify_job(job['title'])
-        # אם המשתמש לא בחר כלום, או שהקטגוריה ברשימה שלו
-        if not user_interest_list or user_interest_list == [''] or cat in user_interest_list:
-            relevant_jobs.append(job)
-            
-    if not relevant_jobs:
-        return
-
-    # כותרת המייל
-    title_text = "👋 Welcome! Here are ALL open positions for you" if is_first_email else "🚀 New Jobs Found!"
+    # 1. הגדרות בסיס
+    sender_email = os.getenv("EMAIL_ADDRESS")
+    password = os.getenv("EMAIL_PASSWORD")
     
-    # בניית גוף המייל
-    jobs_html = "<ul style='padding: 0; list-style-type: none;'>"
-    for job in relevant_jobs:
-        jobs_html += f"""
-        <li style="margin-bottom: 12px; padding: 10px; border-left: 4px solid #ff7e5f; background: #f9f9f9; border-radius: 4px;">
-            <a href='{job['link']}' style='font-weight: bold; text-decoration: none; color: #0984e3; font-size: 16px;'>{job['title']}</a>
-            <div style="font-size: 13px; color: #555; margin-top: 4px;">🏢 <strong>{job['company']}</strong></div>
-        </li>
-        """
-    jobs_html += "</ul>"
+    if not sender_email or not password:
+        print("❌ Error: Email/Password missing in environment variables")
+        return False
 
-    body = f"""
-    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 8px;">
-        <h2 style="color: #2d3436; text-align: center;">{title_text}</h2>
-        <p style="text-align: center; color: #666;">Showing {len(relevant_jobs)} jobs matching your interests.</p>
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-        {jobs_html}
-        <p style="font-size: 12px; color: #999; margin-top: 30px; text-align: center;">Job Hunter Bot 🤖 | Built by Nave Toren</p>
-    </div>
-    """
-
+    # 2. הכנת המייל
     msg = MIMEMultipart()
-    msg['From'] = f"{DISPLAY_NAME} <{SENDER_EMAIL}>"
+    msg['From'] = sender_email
     msg['To'] = to_email
-    msg['Subject'] = f"🎯 {len(relevant_jobs)} Opportunities found for you!"
-    msg.attach(MIMEText(body, 'html'))
+    msg['Subject'] = "Job Hunter Update"
+    
+    # גוף הודעה פשוט כדי לא להסתבך עם HTML כרגע
+    body = f"Found {len(jobs_list)} jobs for you!\n\n"
+    for job in jobs_list:
+        body += f"- {job['title']} at {job['company']}: {job['link']}\n"
+        
+    msg.attach(MIMEText(body, 'plain'))
 
+    # 3. השליחה הקלאסית (Port 587)
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
-        server.quit()
-        print(f"📧 Sent email to {to_email}")
+        print(f"🔌 Connecting to Gmail via Port 587...")
+        # שימוש ב-SMTP רגיל (לא SSL)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.ehlo()          # זיהוי מול השרת
+        server.starttls()      # הצפנת השיחה
+        server.ehlo()          # זיהוי מחדש כמוצפן
+        server.login(sender_email, password)
+        server.sendmail(sender_email, to_email, msg.as_string())
+        server.close()
+        
+        print(f"✅ Email sent successfully to {to_email}")
+        return True
+
     except Exception as e:
-        print(f"❌ Email failed to {to_email}: {e}")
-
-
-
+        print(f"❌ Failed to send email: {e}")
+        return False
 
 async def send_email(to_email, user_interests, jobs_list, is_first_email=False):
     """ שולח מייל עם רשימת המשרות - גרסה משולבת (עיצוב + תיקון SSL) """
