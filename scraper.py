@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 import database
 
-# טעינת משתני סביבה
+# ================== ENV ==================
 load_dotenv()
 
-# ---------- Classification ----------
+# ================== CLASSIFICATION ==================
 
 CATEGORY_KEYWORDS = {
     "Engineering": [
@@ -23,14 +23,13 @@ CATEGORY_KEYWORDS = {
 }
 
 def classify_job(title):
-    title_lower = title.lower()
+    t = title.lower()
     for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(k in title_lower for k in keywords):
+        if any(k in t for k in keywords):
             return category
     return "Other"
 
-
-# ---------- Generic Scraper (Fallback) ----------
+# ================== GENERIC SCRAPER ==================
 
 JOB_TITLE_KEYWORDS = [
     'engineer','developer','manager','specialist','lead','director',
@@ -38,15 +37,12 @@ JOB_TITLE_KEYWORDS = [
     'finance','accountant','recruiter','hr','operations'
 ]
 
-JOB_URL_KEYWORDS = [
-    'job','career','position','opening','apply','role','vacancy'
-]
+JOB_URL_KEYWORDS = ['job','career','position','opening','apply','role','vacancy']
 
 JUNK_KEYWORDS = [
     'privacy','policy','terms','cookie','login','signin','signup','forgot',
     'blog','news','press','about','contact','facebook','twitter','linkedin','instagram','investor'
 ]
-
 
 async def scrape_generic(page, company_row):
     url = company_row['careers_url']
@@ -106,8 +102,7 @@ async def scrape_generic(page, company_row):
     print(f"   ✅ Generic found {len(found_jobs)} jobs at {name}")
     return found_jobs
 
-
-# ---------- Greenhouse Scraper ----------
+# ================== GREENHOUSE SCRAPER ==================
 
 async def scrape_greenhouse(page, company_row):
     url = company_row['careers_url']
@@ -145,8 +140,45 @@ async def scrape_greenhouse(page, company_row):
     print(f"   ✅ Greenhouse found {len(found_jobs)} jobs at {name}")
     return found_jobs
 
+# ================== LEVER SCRAPER ==================
 
-# ---------- Dispatcher (Site Aware) ----------
+async def scrape_lever(page, company_row):
+    url = company_row['careers_url']
+    name = company_row['name']
+    c_id = company_row['id']
+
+    print(f"   🟣 Using Lever scraper for {name}")
+    found_jobs = []
+
+    try:
+        await page.goto(url, timeout=60000, wait_until='domcontentloaded')
+        await asyncio.sleep(2)
+
+        job_cards = await page.query_selector_all("a.posting-title")
+
+        for card in job_cards:
+            title = (await card.inner_text()).strip()
+            href = await card.get_attribute("href")
+
+            if not title or not href:
+                continue
+
+            full = href if href.startswith("http") else url.rstrip("/") + href
+
+            found_jobs.append({
+                "company_id": c_id,
+                "company": name,
+                "title": title,
+                "link": full
+            })
+
+    except Exception as e:
+        print(f"❌ Lever scrape error for {name}: {e}")
+
+    print(f"   ✅ Lever found {len(found_jobs)} jobs at {name}")
+    return found_jobs
+
+# ================== DISPATCHER ==================
 
 async def scrape_company(page, company_row):
     url = company_row['careers_url'].lower()
@@ -154,11 +186,13 @@ async def scrape_company(page, company_row):
     if "greenhouse.io" in url:
         return await scrape_greenhouse(page, company_row)
 
+    elif "lever.co" in url:
+        return await scrape_lever(page, company_row)
+
     else:
         return await scrape_generic(page, company_row)
 
-
-# ---------- Email via Resend ----------
+# ================== EMAIL (RESEND) ==================
 
 async def send_email(to_email, user_interests, jobs_list):
     if not jobs_list:
@@ -173,7 +207,7 @@ async def send_email(to_email, user_interests, jobs_list):
             relevant_jobs.append(job)
 
     if not relevant_jobs:
-        print(f"   ℹ️ No relevant jobs for {to_email} after filtering.")
+        print(f"   ℹ️ No relevant jobs for {to_email}")
         return False
 
     html_body = f"""
@@ -198,7 +232,15 @@ async def send_email(to_email, user_interests, jobs_list):
         </li>
         """
 
-    html_body += "</ul><p>Good luck! 🤖</p></div>"
+    html_body += """
+        </ul>
+
+        <p style="margin-top:20px; font-size:13px; color:#888;">
+            — Career Agent 🤖 <br>
+            by Nave Toren
+        </p>
+    </div>
+    """
 
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key:
@@ -213,7 +255,7 @@ async def send_email(to_email, user_interests, jobs_list):
     payload = {
         "from": "Career Agent <onboarding@resend.dev>",
         "to": [to_email],
-        "subject": f"🔥 New Job Matches ({len(relevant_jobs)})",
+        "subject": f"🎯 Career Agent found {len(relevant_jobs)} new roles for you",
         "html": html_body
     }
 
@@ -232,8 +274,7 @@ async def send_email(to_email, user_interests, jobs_list):
         print(f"❌ Email send failed: {e}")
         return False
 
-
-# ---------- Engine ----------
+# ================== ENGINE ==================
 
 async def run_scraper_engine():
     print("🚀 Starting Smart Scraper MVP...")
