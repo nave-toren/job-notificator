@@ -34,9 +34,9 @@ def classify_job(title):
             return category
     return "Other"
 
-# --- פונקציית המייל (MVP - פשוט ונקי) ---
+# --- פונקציית המייל (החלק שתוקן) ---
 async def send_email(to_email, user_interests, jobs_list, is_first_email=False):
-    """ שולח מייל בשיטה המאובטחת (Port 465 SSL) - עמיד יותר בשרתי ענן """
+    """ שולח מייל בשיטה המותאמת לשרתים (Port 587 STARTTLS) """
     
     # 1. בדיקה שיש תוכן לשלוח
     if not jobs_list:
@@ -92,15 +92,18 @@ async def send_email(to_email, user_interests, jobs_list, is_first_email=False):
     
     msg.attach(MIMEText(html_body, 'html'))
 
-    # 5. שליחה (Port 465 SSL - התיקון הקריטי)
+    # 5. שליחה (התיקון: מעבר ל-TLS בפורט 587)
     try:
-        print(f"   🔌 Connecting to Gmail (Port 465 SSL)...")
-        # שינוי קריטי: שימוש ב-SMTP_SSL במקום SMTP רגיל
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        # שים לב: ב-SSL אין צורך בפקודת starttls()
+        print(f"   🔌 Connecting to Gmail (Port 587 TLS)...")
+        
+        # שינוי: שימוש ב-SMTP רגיל (לא SSL) בפורט 587
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        
+        # שינוי: פקודה קריטית שמשדרגת את השיחה למוצפנת
+        server.starttls()
         
         server.login(sender_email, password)
-        server.sendmail(sender_email, to_email, msg.as_string())
+        server.send_message(msg)
         server.quit()
         
         print(f"✅ Email sent successfully to {to_email}")
