@@ -106,7 +106,7 @@ async def scrape_company(page, company_row):
     found_jobs = []
 
     try:
-        await page.goto(url, timeout=60000)
+        await page.goto(url, timeout=120000)
         try:
             await page.wait_for_load_state('networkidle', timeout=10000)
         except: pass
@@ -154,15 +154,30 @@ async def run_scraper_engine():
         return
 
     # מילון לאחסון כל המשרות החיות שנמצאו בסריקה הזו
-    # Key: Company ID, Value: List of jobs
     jobs_by_company = {}
     
-    # סט לשמירת לינקים שהם חדשים גלובלית (נוספו ל-DB היום)
+    # סט לשמירת לינקים שהם חדשים גלובלית
     globally_new_links = set()
 
     # --- שלב 1: איסוף כל המשרות מהשטח ---
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        # === כאן השינוי הגדול: מצב חיסכון בזיכרון ===
+        print("   🔨 Launching Browser in low-memory mode...")
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', # מציל את הזיכרון!
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+            ]
+        )
+        print("   ✅ Browser launched successfully!")
+        
         page = await browser.new_page()
         
         for company in companies:
@@ -173,7 +188,6 @@ async def run_scraper_engine():
             # בדיקה האם המשרות חדשות ב-DB
             for job in jobs:
                 if not database.job_exists(job['link']):
-                    # משרה חדשה שלא ראינו מעולם!
                     database.add_job(c_id, job['title'], job['link'])
                     globally_new_links.add(job['link'])
         
@@ -187,30 +201,24 @@ async def run_scraper_engine():
         is_new_user = user.get('is_new_user', False)
         interests = user['interests']
         
-        # איזה חברות המשתמש הזה רוצה?
         user_companies = database.get_companies_by_user(email)
         user_company_ids = [c['id'] for c in user_companies]
         
         jobs_to_send = []
         
         for c_id in user_company_ids:
-            # שלוף את המשרות שמצאנו הרגע בחברה הזו
             company_jobs = jobs_by_company.get(c_id, [])
             
             for job in company_jobs:
                 if is_new_user:
-                    # למשתמש חדש - שולחים הכל (כל מה שחי באתר)
                     jobs_to_send.append(job)
                 else:
-                    # למשתמש ותיק - שולחים רק אם זה חדש גלובלית
                     if job['link'] in globally_new_links:
                         jobs_to_send.append(job)
         
-        # שליחת המייל
         if jobs_to_send:
             await send_email(email, interests, jobs_to_send, is_first_email=is_new_user)
             
-            # עדכון סטטוס המשתמש
             if is_new_user:
                 database.mark_user_as_not_new(email)
                 print(f"✅ User {email} welcomed and marked as regular.")
