@@ -97,7 +97,7 @@ async def send_email(to_email, user_interests, jobs_list, is_first_email=False):
         print(f"❌ Email failed to {to_email}: {e}")
 
 async def scrape_company(page, company_row):
-    """ סורק חברה ומחזיר את כל המשרות שנמצאו בה כרגע """
+    """ סורק חברה ומחזיר את כל המשרות שנמצאו בה כרגע - גרסה עמידה לקריסות """
     url = company_row['careers_url']
     name = company_row['name']
     c_id = company_row['id']
@@ -106,43 +106,56 @@ async def scrape_company(page, company_row):
     found_jobs = []
 
     try:
-        await page.goto(url, timeout=120000)
-        try:
-            await page.wait_for_load_state('networkidle', timeout=10000)
-        except: pass
+        print(f"   ⏳ Navigating to {url}...")
         
-        # גלילה למטה לטעינת כל התוכן
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(2)
+        # --- התיקון הקריטי ---
+        # 1. לא מחכים ל-load מלא (שנתקע), אלא רק לטקסט ראשוני (domcontentloaded)
+        # 2. הורדנו את ה-Timeout ל-60 שניות כדי לא להיתקע לנצח
+        await page.goto(url, timeout=60000, wait_until='domcontentloaded')
+        
+        # 3. גלילה הדרגתית (במקום קפיצה אחת) כדי להעיר את האתר ולטעון משרות
+        for _ in range(3): 
+            await page.keyboard.press("PageDown")
+            await asyncio.sleep(1) # נותן לאתר שנייה לטעון תוכן חדש
+            
+        # 4. המתנה קצרה אחרונה ליתר ביטחון שה-JavaScript סיים לצייר
+        print("   💤 Waiting for content to render...")
+        await asyncio.sleep(3)
+        # ---------------------
 
         links = await page.query_selector_all('a')
         seen_links = set() # למניעת כפילויות באותו עמוד
 
         for link in links:
-            txt = await link.inner_text()
-            href = await link.get_attribute('href')
-            
-            if txt and href and len(txt) > 3:
-                txt_lower = txt.lower()
-                if any(junk in txt_lower for junk in JUNK_KEYWORDS): continue
+            try:
+                # שימוש ב-safe access למקרה שהאלמנט נעלם פתאום
+                txt = await link.inner_text()
+                href = await link.get_attribute('href')
                 
-                # בניית לינק מלא
-                full_link = href if href.startswith('http') else url.rstrip('/') + href
-                
-                if full_link not in seen_links:
-                    seen_links.add(full_link)
-                    found_jobs.append({
-                        'company_id': c_id,
-                        'company': name,
-                        'title': txt.strip(),
-                        'link': full_link
-                    })
+                if txt and href and len(txt) > 3:
+                    txt_lower = txt.lower()
+                    if any(junk in txt_lower for junk in JUNK_KEYWORDS): continue
+                    
+                    # בניית לינק מלא
+                    full_link = href if href.startswith('http') else url.rstrip('/') + href
+                    
+                    if full_link not in seen_links:
+                        seen_links.add(full_link)
+                        found_jobs.append({
+                            'company_id': c_id,
+                            'company': name,
+                            'title': txt.strip(),
+                            'link': full_link
+                        })
+            except:
+                continue # אם לינק ספציפי עושה בעיות, מדלגים עליו וממשיכים
                 
     except Exception as e:
         print(f"❌ Error scanning {name}: {e}")
         
+    print(f"   ✅ Found {len(found_jobs)} jobs at {name}")
     return found_jobs
-
+    
 async def run_scraper_engine():
     print("🚀 Starting Smart Scraper...")
     
