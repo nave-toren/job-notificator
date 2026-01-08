@@ -61,7 +61,8 @@ def init_db():
             print(f"⚠️ Attempt {attempt+1}/{max_retries} failed. Error: {e}")
             time.sleep(2)
 
-    print("💀 Critical Error: Could not connect to DB.")
+    raise RuntimeError("DB initialization failed — stopping app")
+
 
 # --- Companies ---
 def get_companies_by_user(user_email):
