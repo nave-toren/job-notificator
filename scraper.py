@@ -1,7 +1,7 @@
 import asyncio
 import os
 import requests
-import re # חובה לייבא את זה בשביל התיקון של ארטליסט
+import re
 from urllib.parse import urljoin
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
@@ -39,7 +39,6 @@ ISRAEL_LOCATIONS = [
     'hod hasharon', 'ramat gan', 'givatayim', 'yokneam', 'beer sheva'
 ]
 
-# רשימה לחסימה רק אם המשתמש ביקש ישראל
 BLOCK_LOCATIONS = [
     'united states', 'usa', 'uk', 'united kingdom', 'london', 'paris', 'berlin', 
     'new york', 'san francisco', 'california', 'austin', 'texas', 'boston', 
@@ -69,12 +68,9 @@ def is_valid_job_link(text, href, url_base):
     text_lower = text.lower().strip()
     href_lower = href.lower()
     
-    # 1. סינון תפריטים ומילים בודדות
     if len(text.split()) == 1 and text_lower in ['products', 'solutions', 'customers', 'support', 'company', 'resources', 'platform', 'careers', 'jobs']:
         return False
 
-    # 2. ✅ תיקון Artlist: סינון לינקים שמכילים מספרים + jobs (למשל "9 jobs")
-    # זה מונע ממנו לקחת את כפתורי הסינון
     if re.search(r'\d+\s+(jobs|positions|roles|openings)', text_lower):
         return False
     
@@ -159,24 +155,18 @@ async def scrape_universal(page, company_row):
     print(f"   ✅ Found {len(found_jobs)} potential jobs at {name}")
     return found_jobs
 
-# ================== EMAIL SYSTEM (RESTRUCTURED) ==================
+# ================== EMAIL SYSTEM ==================
 
 async def send_email(to_email, user_interests, jobs_list):
     if not jobs_list: return False
     
     user_interest_list = user_interests.split(',') if user_interests else []
     
-    # 1. Grouping jobs by Category
-    # מבנה: { 'Engineering': [job1, job2], 'Marketing': [job3] }
     jobs_by_category = {}
-    
     for job in jobs_list:
         cat = classify_job(job['title'])
-        
-        # סינון לפי אינטרסים של המשתמש
         if user_interest_list and cat not in user_interest_list:
             continue
-            
         if cat not in jobs_by_category:
             jobs_by_category[cat] = []
         jobs_by_category[cat].append(job)
@@ -185,22 +175,25 @@ async def send_email(to_email, user_interests, jobs_list):
 
     total_jobs = sum(len(v) for v in jobs_by_category.values())
 
-    # 2. Building the HTML
     html_body = f"""
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
         <div style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); padding: 20px; border-radius: 10px 10px 0 0; text-align: center;">
             <h1 style="color: white; margin: 0; font-size: 24px;">🎯 Fresh Opportunities!</h1>
-            <p style="color: #dfe6e9; margin-top: 5px;">Found {total_jobs} new positions</p>
+            <p style="color: #e2e2e2; margin-top: 5px; font-size: 13px; font-weight: 600;">Created by Nave Toren</p>
         </div>
         
         <div style="padding: 20px; background: #ffffff; border: 1px solid #e1e1e1; border-top: none;">
+            
+            <p style="color: #636e72; font-size: 14px; margin-bottom: 25px; text-align: center; line-height: 1.5; background: #f1f2f6; padding: 10px; border-radius: 8px;">
+                I will continue scanning these companies for you.<br>
+                You'll receive an email only when a new matching position pops up! 🕵️‍♂️
+            </p>
+
     """
     
-    # מיון הקטגוריות כדי שהסדר יהיה קבוע
     sorted_categories = sorted(jobs_by_category.keys())
 
     for cat in sorted_categories:
-        # כותרת המחלקה
         cat_color = "#6c5ce7"
         if cat == "Engineering": cat_color = "#e17055"
         elif cat == "Marketing": cat_color = "#00b894"
@@ -215,13 +208,10 @@ async def send_email(to_email, user_interests, jobs_list):
         <ul style="padding: 0; list-style: none;">
         """
         
-        # המשרות בתוך המחלקה
         for job in jobs_by_category[cat]:
-            loc_display = job.get('location', '🌎')
-            
             html_body += f"""
             <li style="margin-bottom: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 3px solid {cat_color};">
-                <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <a href="{job['link']}" style="font-weight: bold; color: #2d3436; text-decoration: none; font-size: 15px; display: block; margin-bottom: 4px;">
                             {job['title']}
@@ -230,15 +220,11 @@ async def send_email(to_email, user_interests, jobs_list):
                             {job['company']}
                         </div>
                     </div>
-                    <div style="font-size: 12px; background: #e1e1e1; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
-                        {loc_display}
-                    </div>
                 </div>
             </li>
             """
         html_body += "</ul>"
     
-    # פוטר
     html_body += """
             <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; text-align: center; color: #b2bec3; font-size: 12px;">
                 <p>Now you can play matkot on the beach 🏖️ while I'm finding jobs for you 😎</p>
@@ -269,7 +255,7 @@ async def send_email(to_email, user_interests, jobs_list):
         return False
 
 # ================== MAIN ENGINE ==================
-# ... (אותו קוד engine בדיוק כמו קודם, אין שינוי כאן)
+
 async def run_scraper_engine():
     print("🚀 Starting Universal Scraper Engine...")
     companies = database.get_all_companies_for_scan()
