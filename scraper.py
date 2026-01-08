@@ -1,7 +1,7 @@
 import asyncio
 import os
 import requests
-import re
+import re # חובה לייבא את זה בשביל התיקון של ארטליסט
 from urllib.parse import urljoin
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
@@ -33,23 +33,18 @@ NEGATIVE_KEYWORDS = [
 
 URL_INDICATORS = ['/job', '/career', '/position', '/opening', '/apply', '/vacancy', 'greenhouse.io', 'lever.co', 'comeet']
 
-# --- מיקומים ---
-
-# ערים בישראל (לזיהוי חיובי - לשימוש בתצוגה)
 ISRAEL_LOCATIONS = [
     'israel', 'tel aviv', 'tlv', 'haifa', 'jerusalem', 'herzliya', 
     'raanana', 'petah tikva', 'rishon', 'rehovot', 'netanya', 
     'hod hasharon', 'ramat gan', 'givatayim', 'yokneam', 'beer sheva'
 ]
 
-# ערים בחו"ל (לזיהוי שלילי - לחסימה רק אם המשתמש ביקש ישראל)
-# הרעיון: חוסמים רק מה שבטוח לא רלוונטי
+# רשימה לחסימה רק אם המשתמש ביקש ישראל
 BLOCK_LOCATIONS = [
     'united states', 'usa', 'uk', 'united kingdom', 'london', 'paris', 'berlin', 
     'new york', 'san francisco', 'california', 'austin', 'texas', 'boston', 
     'germany', 'france', 'amsterdam', 'netherlands', 'canada', 'toronto', 
-    'australia', 'sydney', 'remote - us', 'remote - eu', 'emea remote', 
-    'singapore', 'tokyo', 'india', 'bangalore', 'poland', 'warsaw'
+    'australia', 'sydney', 'singapore', 'tokyo', 'india'
 ]
 
 CATEGORY_MAPPING = {
@@ -68,11 +63,20 @@ def classify_job(title):
             return category
     return "Other"
 
-# ================== THE UNIVERSAL SCRAPER LOGIC ==================
+# ================== LOGIC ==================
 
 def is_valid_job_link(text, href, url_base):
     text_lower = text.lower().strip()
     href_lower = href.lower()
+    
+    # 1. סינון תפריטים ומילים בודדות
+    if len(text.split()) == 1 and text_lower in ['products', 'solutions', 'customers', 'support', 'company', 'resources', 'platform', 'careers', 'jobs']:
+        return False
+
+    # 2. ✅ תיקון Artlist: סינון לינקים שמכילים מספרים + jobs (למשל "9 jobs")
+    # זה מונע ממנו לקחת את כפתורי הסינון
+    if re.search(r'\d+\s+(jobs|positions|roles|openings)', text_lower):
+        return False
     
     if len(text) < 3 or len(text) > 100: return False
     if any(neg in text_lower for neg in NEGATIVE_KEYWORDS): return False
@@ -100,8 +104,7 @@ async def scrape_universal(page, company_row):
         try:
             await page.goto(url, timeout=60000, wait_until='domcontentloaded')
             await asyncio.sleep(4)
-        except Exception as e:
-            print(f"      ⚠️ Timeout/Nav error: {e}")
+        except: pass
 
         for _ in range(3):
             await page.keyboard.press("PageDown")
@@ -128,13 +131,14 @@ async def scrape_universal(page, company_row):
                 if not text or not href: continue
                 full_link = urljoin(url, href)
                 
-                if is_valid_job_link(text, href, url):
+                clean_title = text.strip().replace("Find out more >", "").replace("Find out more", "").strip()
+
+                if is_valid_job_link(clean_title, href, url):
                     if full_link not in seen_links:
                         seen_links.add(full_link)
                         
-                        # זיהוי מיקום להצגה (לא לסינון - הסינון קורה לפני השליחה)
                         location_tag = "🌎 Global/Other"
-                        txt_lower = text.lower()
+                        txt_lower = clean_title.lower()
                         url_lower = full_link.lower()
                         
                         if any(loc in txt_lower or loc in url_lower for loc in ISRAEL_LOCATIONS):
@@ -143,12 +147,11 @@ async def scrape_universal(page, company_row):
                         found_jobs.append({
                             "company_id": c_id,
                             "company": name,
-                            "title": text.strip(),
+                            "title": clean_title,
                             "link": full_link,
                             "location": location_tag
                         })
-            except:
-                continue
+            except: continue
 
     except Exception as e:
         print(f"❌ Error scanning {name}: {e}")
@@ -156,53 +159,91 @@ async def scrape_universal(page, company_row):
     print(f"   ✅ Found {len(found_jobs)} potential jobs at {name}")
     return found_jobs
 
-
-# ================== EMAIL SYSTEM ==================
+# ================== EMAIL SYSTEM (RESTRUCTURED) ==================
 
 async def send_email(to_email, user_interests, jobs_list):
     if not jobs_list: return False
     
     user_interest_list = user_interests.split(',') if user_interests else []
-    relevant_jobs = []
+    
+    # 1. Grouping jobs by Category
+    # מבנה: { 'Engineering': [job1, job2], 'Marketing': [job3] }
+    jobs_by_category = {}
     
     for job in jobs_list:
         cat = classify_job(job['title'])
-        if not user_interest_list or cat in user_interest_list:
-            relevant_jobs.append(job)
+        
+        # סינון לפי אינטרסים של המשתמש
+        if user_interest_list and cat not in user_interest_list:
+            continue
             
-    if not relevant_jobs: return False
+        if cat not in jobs_by_category:
+            jobs_by_category[cat] = []
+        jobs_by_category[cat].append(job)
+            
+    if not jobs_by_category: return False
 
+    total_jobs = sum(len(v) for v in jobs_by_category.values())
+
+    # 2. Building the HTML
     html_body = f"""
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #4a4a4a;">🚀 New Jobs Found!</h2>
-        <p>Found <b>{len(relevant_jobs)}</b> matches for: <b>{user_interests if user_interests else 'All'}</b></p>
-        <ul style="padding: 0; list-style: none;">
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <div style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); padding: 20px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">🎯 Fresh Opportunities!</h1>
+            <p style="color: #dfe6e9; margin-top: 5px;">Found {total_jobs} new positions</p>
+        </div>
+        
+        <div style="padding: 20px; background: #ffffff; border: 1px solid #e1e1e1; border-top: none;">
     """
     
-    for job in relevant_jobs:
-        cat = classify_job(job['title'])
-        loc_display = job.get('location', '🌎')
-        color = "#3498db"
-        if cat == 'Engineering': color = "#e74c3c"
-        elif cat == 'Marketing': color = "#2ecc71"
-        
+    # מיון הקטגוריות כדי שהסדר יהיה קבוע
+    sorted_categories = sorted(jobs_by_category.keys())
+
+    for cat in sorted_categories:
+        # כותרת המחלקה
+        cat_color = "#6c5ce7"
+        if cat == "Engineering": cat_color = "#e17055"
+        elif cat == "Marketing": cat_color = "#00b894"
+        elif cat == "Finance": cat_color = "#0984e3"
+
         html_body += f"""
-        <li style="margin-bottom: 10px; padding: 10px; border-left: 4px solid {color}; background: #f8f9fa;">
-            <div style="font-size: 12px; color: #7f8c8d;">
-                {cat} @ {job['company']} &nbsp; | &nbsp; <b>{loc_display}</b>
-            </div>
-            <a href="{job['link']}" style="font-weight: bold; text-decoration: none; color: #2c3e50; font-size: 16px;">
-                {job['title']}
-            </a>
-        </li>
+        <div style="margin-top: 25px; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid {cat_color};">
+            <h3 style="margin: 0; color: {cat_color}; text-transform: uppercase; font-size: 16px; letter-spacing: 1px;">
+                {cat} ({len(jobs_by_category[cat])})
+            </h3>
+        </div>
+        <ul style="padding: 0; list-style: none;">
         """
+        
+        # המשרות בתוך המחלקה
+        for job in jobs_by_category[cat]:
+            loc_display = job.get('location', '🌎')
+            
+            html_body += f"""
+            <li style="margin-bottom: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border-left: 3px solid {cat_color};">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <a href="{job['link']}" style="font-weight: bold; color: #2d3436; text-decoration: none; font-size: 15px; display: block; margin-bottom: 4px;">
+                            {job['title']}
+                        </a>
+                        <div style="font-size: 12px; color: #636e72;">
+                            {job['company']}
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; background: #e1e1e1; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">
+                        {loc_display}
+                    </div>
+                </div>
+            </li>
+            """
+        html_body += "</ul>"
     
-    # --- הפוטר החדש שלך ---
+    # פוטר
     html_body += """
-        </ul>
-        <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; text-align: center; color: #555; font-size: 14px;">
-            <p>Now you can play matkot on the beach 🏖️ while I'm finding jobs for you 😎</p>
-            <p style="font-weight: bold; margin-top: 10px;">— Career Agent 🤖<br>by Nave Toren</p>
+            <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; text-align: center; color: #b2bec3; font-size: 12px;">
+                <p>Now you can play matkot on the beach 🏖️ while I'm finding jobs for you 😎</p>
+                <p style="font-weight: bold; margin-top: 5px;">— Career Agent 🤖</p>
+            </div>
         </div>
     </div>
     """
@@ -216,7 +257,7 @@ async def send_email(to_email, user_interests, jobs_list):
             json={
                 "from": "Career Agent <onboarding@resend.dev>",
                 "to": [to_email],
-                "subject": f"🔥 {len(relevant_jobs)} New Jobs Found!",
+                "subject": f"🔥 {total_jobs} New Jobs Found!",
                 "html": html_body
             },
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -228,7 +269,7 @@ async def send_email(to_email, user_interests, jobs_list):
         return False
 
 # ================== MAIN ENGINE ==================
-
+# ... (אותו קוד engine בדיוק כמו קודם, אין שינוי כאן)
 async def run_scraper_engine():
     print("🚀 Starting Universal Scraper Engine...")
     companies = database.get_all_companies_for_scan()
@@ -268,8 +309,6 @@ async def run_scraper_engine():
         email = user['email']
         interests = user['interests']
         is_new_user = user.get('is_new_user', False)
-        
-        # שליפת העדפת האזור (ברירת מחדל 'Other' אם לא קיים)
         region_pref = user.get('region_preference', 'Other') 
         
         user_companies = database.get_companies_by_user(email)
@@ -279,23 +318,13 @@ async def run_scraper_engine():
         for c_id in user_company_ids:
             current_jobs = jobs_by_company.get(c_id, [])
             for job in current_jobs:
-                
-                # --- לוגיקת סינון משופרת ---
-                
-                # 1. אם המשתמש בחר "Israel", בדוק אם צריך לחסום
                 if region_pref == 'Israel':
                     title_lower = job['title'].lower()
                     link_lower = job['link'].lower()
-                    
-                    # בדיקה: האם זה בבירור מחוץ לישראל?
                     is_blocked_location = any(b in title_lower or b in link_lower for b in BLOCK_LOCATIONS)
-                    
-                    # אם זה מזוהה כחו"ל (למשל "London"), אנחנו מדלגים.
-                    # אבל אם לא זיהינו כלום (או שזיהינו ישראל) - אנחנו משאירים!
                     if is_blocked_location:
                         continue 
                 
-                # 2. בדיקת חדש/ישן
                 if is_new_user:
                     jobs_to_send.append(job)
                 else:
@@ -314,7 +343,6 @@ async def run_scraper_engine():
 async def run_scraper_with_lock():
     global is_scraping
     if is_scraping:
-        print("⏳ Scraper running. Skipping.")
         return
     is_scraping = True
     try:

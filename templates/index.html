@@ -305,12 +305,21 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <label for="region">📍 LOCATION PREFERENCE</label>
-                <select name="region" id="region" style="width: 100%; padding: 14px; border: 2px solid #f1f2f6; border-radius: 12px; font-size: 1rem; background: #fff; font-family: inherit; color: var(--text-dark); cursor: pointer;">
-                    <option value="Other" selected>🌎 Global / Remote (Default)</option>
-                    <option value="Israel">🇮🇱 Israel Only (Best Effort)</option>
-                </select>
+            <div style="margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 12px;">
+                <label style="margin-bottom: 10px;">📍 LOCATION PREFERENCE</label>
+                
+                <div style="display: flex; gap: 20px;">
+                    <label style="display: flex; align-items: center; cursor: pointer; background: white; padding: 10px 15px; border-radius: 8px; border: 1px solid #ddd;">
+                        <input type="checkbox" name="loc_israel" value="yes" style="width: auto; margin-right: 8px;">
+                        <span>🇮🇱 Israel</span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; cursor: pointer; background: white; padding: 10px 15px; border-radius: 8px; border: 1px solid #ddd;">
+                        <input type="checkbox" name="loc_global" value="yes" checked style="width: auto; margin-right: 8px;">
+                        <span>🌎 Global / Remote</span>
+                    </label>
+                </div>
+                <div class="limit-text" style="text-align: left; margin-top: 5px;">*Select 'Israel' to filter out generic global jobs.</div>
             </div>
 
             <button type="submit" class="btn btn-primary">Save & Start Agent 🚀</button>

@@ -94,19 +94,30 @@ async def add_company(
     return RedirectResponse(url=f"/?view_email={user_email}", status_code=303)
 
 
+# בקובץ main.py, עדכן את הפונקציה subscribe בלבד:
+
 @app.post("/subscribe")
 async def subscribe(
     background_tasks: BackgroundTasks, 
     email: str = Form(...),
     departments: List[str] = Form(default=[]),
-    region: str = Form(default="Other") # <--- 1. קליטת האזור מהטופס
+    # קליטת הצ'קבוקסים החדשים (אם לא סומנו הם יהיו None)
+    loc_israel: str = Form(None),
+    loc_global: str = Form(None)
 ):
     interests_str = ",".join(departments)
     
-    # <--- 2. העברת האזור לדאטה בייס
+    # לוגיקת החלטה:
+    # אם המשתמש סימן רק את ישראל -> אנחנו מסננים לישראל בלבד.
+    # אם המשתמש סימן גם גלובל (או לא סימן כלום, או רק גלובל) -> אנחנו נותנים הכל (Other).
+    region = "Other"
+    
+    if loc_israel and not loc_global:
+        region = "Israel"
+    
     database.add_user(email, interests_str, region)
     
-    print(f"👤 User {email} subscribed. Region: {region}, Interests: {interests_str}")
+    print(f"👤 User {email} subscribed. Region Preference: {region} (Isr: {loc_israel}, Glb: {loc_global})")
     
     # ✅ Trigger scraper in background
     background_tasks.add_task(start_scraper_task)
