@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import database
 # וודא שקובץ scraper.py נמצא באותה תיקייה
-from scraper import run_scraper_engine
+from scraper import run_scraper_with_lock
 from dotenv import load_dotenv
 
 # טעינת משתני סביבה
@@ -88,7 +88,7 @@ async def subscribe(
     print(f"👤 User {email} subscribed with interests: {interests_str}")
     
     # הפעלת הסריקה באופן מיידי ברקע כדי שהמשתמש יקבל מייל ראשוני
-    background_tasks.add_task(run_scraper_engine)
+    background_tasks.add_task(run_scraper_with_lock)
     
     return RedirectResponse(url=f"/?subscribed=true&view_email={email}", status_code=303)
 
@@ -108,7 +108,7 @@ async def manual_trigger_scan(background_tasks: BackgroundTasks):
     נקודת קצה להפעלה על ידי Cron Job או ידנית.
     """
     print("🔔 Manual/Cron Trigger Received! Starting Scraper...")
-    background_tasks.add_task(run_scraper_engine)
+    background_tasks.add_task(run_scraper_with_lock)
     return {"status": "success", "message": "Scraper started in background 🚀"}
 
 # --- זה החלק שהיה חסר לך! ---

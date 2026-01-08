@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 import database
 
+# 🔐 GLOBAL LOCK
+is_scraping = False
+
 # ================== ENV ==================
 load_dotenv()
 
@@ -178,6 +181,47 @@ async def scrape_lever(page, company_row):
     print(f"   ✅ Lever found {len(found_jobs)} jobs at {name}")
     return found_jobs
 
+# ================== COMEET SCRAPER ==================
+
+async def scrape_comeet(page, company_row):
+    url = company_row['careers_url']
+    name = company_row['name']
+    c_id = company_row['id']
+
+    print(f"   🔵 Using Comeet scraper for {name}")
+    found_jobs = []
+
+    try:
+        await page.goto(url, timeout=60000, wait_until='networkidle')
+        await asyncio.sleep(3)
+
+        job_cards = await page.query_selector_all("a[data-position-id], a.comeet-position-link")
+
+        for card in job_cards:
+            title = (await card.inner_text()).strip()
+            href = await card.get_attribute("href")
+
+            if not title or not href:
+                continue
+
+            if not href.startswith("http"):
+                full = url.rstrip("/") + "/" + href.lstrip("/")
+            else:
+                full = href
+
+            found_jobs.append({
+                "company_id": c_id,
+                "company": name,
+                "title": title,
+                "link": full
+            })
+
+    except Exception as e:
+        print(f"❌ Comeet scrape error for {name}: {e}")
+
+    print(f"   ✅ Comeet found {len(found_jobs)} jobs at {name}")
+    return found_jobs
+
 # ================== DISPATCHER ==================
 
 async def scrape_company(page, company_row):
@@ -188,6 +232,9 @@ async def scrape_company(page, company_row):
 
     elif "lever.co" in url:
         return await scrape_lever(page, company_row)
+
+    elif "comeet" in url:
+        return await scrape_comeet(page, company_row)
 
     else:
         return await scrape_generic(page, company_row)
@@ -332,3 +379,21 @@ async def run_scraper_engine():
             print(f"🤷‍♂️ No updates for {email}")
 
     print("🏁 Scraper finished.")
+
+# ================== ENGINE WITH LOCK ==================
+
+async def run_scraper_with_lock():
+    global is_scraping
+
+    if is_scraping:
+        print("⏳ Scraper already running. Skipping this trigger.")
+        return
+
+    print("🔐 Lock acquired. Starting scraper...")
+    is_scraping = True
+
+    try:
+        await run_scraper_engine()
+    finally:
+        is_scraping = False
+        print("🔓 Lock released. Scraper finished.")
