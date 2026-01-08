@@ -15,7 +15,6 @@ load_dotenv()
 
 # ================== CONFIGURATION & KEYWORDS ==================
 
-# מילים שמעלות את הציון של הלינק (סבירות גבוהה שזו משרה)
 POSITIVE_KEYWORDS = [
     'engineer', 'developer', 'manager', 'specialist', 'lead', 'director',
     'analyst', 'designer', 'qa', 'r&d', 'full stack', 'backend', 'frontend',
@@ -24,7 +23,6 @@ POSITIVE_KEYWORDS = [
     'attorney', 'counsel', 'data', 'scientist', 'researcher', 'technician'
 ]
 
-# מילים שבגללן נפסול את הלינק מיידית
 NEGATIVE_KEYWORDS = [
     'privacy', 'policy', 'terms', 'cookie', 'login', 'sign in', 'sign up',
     'register', 'forgot', 'blog', 'news', 'press', 'about', 'contact',
@@ -33,10 +31,27 @@ NEGATIVE_KEYWORDS = [
     'read more', 'learn more', 'faq', 'help', 'events'
 ]
 
-# מילים ב-URL שמעלות סבירות שזו משרה
 URL_INDICATORS = ['/job', '/career', '/position', '/opening', '/apply', '/vacancy', 'greenhouse.io', 'lever.co', 'comeet']
 
-# סיווג לפי קטגוריות (לשליחת המייל)
+# --- מיקומים ---
+
+# ערים בישראל (לזיהוי חיובי - לשימוש בתצוגה)
+ISRAEL_LOCATIONS = [
+    'israel', 'tel aviv', 'tlv', 'haifa', 'jerusalem', 'herzliya', 
+    'raanana', 'petah tikva', 'rishon', 'rehovot', 'netanya', 
+    'hod hasharon', 'ramat gan', 'givatayim', 'yokneam', 'beer sheva'
+]
+
+# ערים בחו"ל (לזיהוי שלילי - לחסימה רק אם המשתמש ביקש ישראל)
+# הרעיון: חוסמים רק מה שבטוח לא רלוונטי
+BLOCK_LOCATIONS = [
+    'united states', 'usa', 'uk', 'united kingdom', 'london', 'paris', 'berlin', 
+    'new york', 'san francisco', 'california', 'austin', 'texas', 'boston', 
+    'germany', 'france', 'amsterdam', 'netherlands', 'canada', 'toronto', 
+    'australia', 'sydney', 'remote - us', 'remote - eu', 'emea remote', 
+    'singapore', 'tokyo', 'india', 'bangalore', 'poland', 'warsaw'
+]
+
 CATEGORY_MAPPING = {
     "Engineering": ['engineer', 'developer', 'r&d', 'data', 'algorithm', 'architect', 'full stack', 'backend', 'frontend', 'mobile', 'devops', 'software', 'qa', 'cyber', 'security', 'it'],
     "Product": ['product', 'design', 'ux', 'ui', 'creative', 'graphic'],
@@ -56,43 +71,24 @@ def classify_job(title):
 # ================== THE UNIVERSAL SCRAPER LOGIC ==================
 
 def is_valid_job_link(text, href, url_base):
-    """
-    מנוע ההחלטה: האם הלינק הזה הוא משרה?
-    מחזיר True/False
-    """
     text_lower = text.lower().strip()
     href_lower = href.lower()
     
-    # 1. סינון זבל מהיר
-    if len(text) < 3 or len(text) > 100: return False # קצר מדי או ארוך מדי (כנראה כותרת מאמר)
+    if len(text) < 3 or len(text) > 100: return False
     if any(neg in text_lower for neg in NEGATIVE_KEYWORDS): return False
     if any(neg in href_lower for neg in NEGATIVE_KEYWORDS): return False
     if "javascript:" in href_lower or "mailto:" in href_lower: return False
 
-    # 2. האם יש מילת מפתח חזקה בטקסט? (Engineer, Manager...)
     has_title_keyword = any(pos in text_lower for pos in POSITIVE_KEYWORDS)
-    
-    # 3. האם ה-URL נראה כמו משרה?
     has_url_indicator = any(ind in href_lower for ind in URL_INDICATORS)
     
-    # לוגיקת ההחלטה:
-    # אם יש מילת מפתח בטקסט - זה כמעט בטוח משרה.
-    if has_title_keyword:
-        return True
-    
-    # אם אין מילת מפתח בטקסט, אבל ה-URL ממש צועק "משרה" (למשל job/123)
+    if has_title_keyword: return True
     if has_url_indicator:
-        # נוודא שהטקסט לא גנרי מדי (כמו "View")
-        if len(text.split()) > 1: 
-            return True
+        if len(text.split()) > 1: return True
             
     return False
 
 async def scrape_universal(page, company_row):
-    """
-    הסקראפר האוניברסלי.
-    סורק את הדף הראשי + כל ה-IFrames בצורה רקורסיבית.
-    """
     url = company_row['careers_url']
     name = company_row['name']
     c_id = company_row['id']
@@ -101,27 +97,20 @@ async def scrape_universal(page, company_row):
     found_jobs = []
 
     try:
-        # 1. ניווט חכם
         try:
-            await page.goto(url, timeout=60000, wait_until='domcontentloaded') # domcontentloaded מהיר יותר מ-networkidle
-            await asyncio.sleep(4) # נותן ל-JS (ול-Comeet/Greenhouse) זמן להיטען
+            await page.goto(url, timeout=60000, wait_until='domcontentloaded')
+            await asyncio.sleep(4)
         except Exception as e:
             print(f"      ⚠️ Timeout/Nav error: {e}")
-            # ממשיכים, אולי חלק מהדף נטען
 
-        # 2. גלילה להערת Lazy Loading
         for _ in range(3):
             await page.keyboard.press("PageDown")
             await asyncio.sleep(1)
 
-        # 3. איסוף כל האלמנטים מכל ה-Frames
         all_elements = []
-        
-        # אוסף מה-Main Frame
         main_links = await page.query_selector_all('a')
         all_elements.extend(main_links)
         
-        # אוסף מכל ה-Iframes (זה ה-Game Changer עבור Base44/Check Point)
         for frame in page.frames:
             if frame == page.main_frame: continue
             try:
@@ -131,28 +120,32 @@ async def scrape_universal(page, company_row):
 
         seen_links = set()
 
-        # 4. עיבוד וסינון
         for link in all_elements:
             try:
-                # משיכת טקסט ולינק (טיפול בשגיאות אלמנטים שנעלמו)
                 text = await link.inner_text()
                 href = await link.get_attribute('href')
                 
                 if not text or not href: continue
-                
-                # נרמול הלינק
                 full_link = urljoin(url, href)
                 
-                # בדיקת הלינק במנוע ההחלטה
                 if is_valid_job_link(text, href, url):
-                    
                     if full_link not in seen_links:
                         seen_links.add(full_link)
+                        
+                        # זיהוי מיקום להצגה (לא לסינון - הסינון קורה לפני השליחה)
+                        location_tag = "🌎 Global/Other"
+                        txt_lower = text.lower()
+                        url_lower = full_link.lower()
+                        
+                        if any(loc in txt_lower or loc in url_lower for loc in ISRAEL_LOCATIONS):
+                            location_tag = "🇮🇱 Israel"
+
                         found_jobs.append({
                             "company_id": c_id,
                             "company": name,
                             "title": text.strip(),
-                            "link": full_link
+                            "link": full_link,
+                            "location": location_tag
                         })
             except:
                 continue
@@ -188,20 +181,31 @@ async def send_email(to_email, user_interests, jobs_list):
     
     for job in relevant_jobs:
         cat = classify_job(job['title'])
+        loc_display = job.get('location', '🌎')
         color = "#3498db"
         if cat == 'Engineering': color = "#e74c3c"
         elif cat == 'Marketing': color = "#2ecc71"
         
         html_body += f"""
         <li style="margin-bottom: 10px; padding: 10px; border-left: 4px solid {color}; background: #f8f9fa;">
-            <div style="font-size: 12px; color: #7f8c8d;">{cat} @ {job['company']}</div>
+            <div style="font-size: 12px; color: #7f8c8d;">
+                {cat} @ {job['company']} &nbsp; | &nbsp; <b>{loc_display}</b>
+            </div>
             <a href="{job['link']}" style="font-weight: bold; text-decoration: none; color: #2c3e50; font-size: 16px;">
                 {job['title']}
             </a>
         </li>
         """
     
-    html_body += "</ul></div>"
+    # --- הפוטר החדש שלך ---
+    html_body += """
+        </ul>
+        <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; text-align: center; color: #555; font-size: 14px;">
+            <p>Now you can play matkot on the beach 🏖️ while I'm finding jobs for you 😎</p>
+            <p style="font-weight: bold; margin-top: 10px;">— Career Agent 🤖<br>by Nave Toren</p>
+        </div>
+    </div>
+    """
 
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key: return False
@@ -244,14 +248,11 @@ async def run_scraper_engine():
             args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process']
         )
         page = await browser.new_page()
-        # User Agent חיוני כדי לא להיחסם
         await page.set_extra_http_headers({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
 
         for company in companies:
             c_id = company['id']
-            # שימוש בפונקציה האחת והיחידה!
             jobs = await scrape_universal(page, company)
-            
             jobs_by_company[c_id] = jobs
 
             for job in jobs:
@@ -262,10 +263,14 @@ async def run_scraper_engine():
         await browser.close()
 
     print(f"\n📨 Processing emails for {len(users)} users...")
+    
     for user in users:
         email = user['email']
         interests = user['interests']
         is_new_user = user.get('is_new_user', False)
+        
+        # שליפת העדפת האזור (ברירת מחדל 'Other' אם לא קיים)
+        region_pref = user.get('region_preference', 'Other') 
         
         user_companies = database.get_companies_by_user(email)
         user_company_ids = [c['id'] for c in user_companies]
@@ -274,6 +279,23 @@ async def run_scraper_engine():
         for c_id in user_company_ids:
             current_jobs = jobs_by_company.get(c_id, [])
             for job in current_jobs:
+                
+                # --- לוגיקת סינון משופרת ---
+                
+                # 1. אם המשתמש בחר "Israel", בדוק אם צריך לחסום
+                if region_pref == 'Israel':
+                    title_lower = job['title'].lower()
+                    link_lower = job['link'].lower()
+                    
+                    # בדיקה: האם זה בבירור מחוץ לישראל?
+                    is_blocked_location = any(b in title_lower or b in link_lower for b in BLOCK_LOCATIONS)
+                    
+                    # אם זה מזוהה כחו"ל (למשל "London"), אנחנו מדלגים.
+                    # אבל אם לא זיהינו כלום (או שזיהינו ישראל) - אנחנו משאירים!
+                    if is_blocked_location:
+                        continue 
+                
+                # 2. בדיקת חדש/ישן
                 if is_new_user:
                     jobs_to_send.append(job)
                 else:

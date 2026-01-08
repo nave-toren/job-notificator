@@ -31,15 +31,24 @@ def init_db():
                 );
             ''')
             
-            # השינוי כאן: הוספת is_new_user
+            # יצירת טבלת משתמשים (אם לא קיימת)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
                     interests TEXT,
-                    is_new_user BOOLEAN DEFAULT TRUE
+                    is_new_user BOOLEAN DEFAULT TRUE,
+                    region_preference TEXT DEFAULT 'Other'
                 );
             ''')
+
+            # --- מיגרציה אוטומטית למשתמשים קיימים ---
+            # מנסים להוסיף את העמודה ידנית למקרה שהטבלה כבר קיימת בלי העמודה הזו
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS region_preference TEXT DEFAULT 'Other';")
+            except Exception:
+                # אם הפקודה נכשלת (בגרסאות ישנות של פוסטגרס) או העמודה קיימת, מתעלמים
+                conn.rollback() 
 
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS jobs_cache (
@@ -102,17 +111,25 @@ def delete_company(company_id, user_email):
     conn.commit()
     conn.close()
 
-# --- Users ---
-def add_user(email, interests_str=""):
+# --- Users (UPDATED) ---
+def add_user(email, interests_str="", region="Other"):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('SELECT 1 FROM users WHERE email = %s', (email,))
         if cursor.fetchone():
-            cursor.execute('UPDATE users SET interests = %s WHERE email = %s', (interests_str, email))
+            # עדכון משתמש קיים: מעדכנים גם אינטרסים וגם אזור
+            cursor.execute('''
+                UPDATE users 
+                SET interests = %s, region_preference = %s 
+                WHERE email = %s
+            ''', (interests_str, region, email))
         else:
-            # ברירת מחדל: משתמש חדש
-            cursor.execute('INSERT INTO users (email, interests, is_new_user) VALUES (%s, %s, TRUE)', (email, interests_str))
+            # משתמש חדש: מכניסים הכל
+            cursor.execute('''
+                INSERT INTO users (email, interests, is_new_user, region_preference) 
+                VALUES (%s, %s, TRUE, %s)
+            ''', (email, interests_str, region))
         conn.commit()
     except Exception as e:
         print(f"Error adding/updating user: {e}")

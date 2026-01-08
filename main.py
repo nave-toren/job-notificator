@@ -43,14 +43,14 @@ def start_scraper_task():
 
 @app.get("/")
 async def index(
-    request: Request,
-    subscribed: bool = False,
-    unsubscribed: bool = False,
-    error_message: str | None = None,
+    request: Request, 
+    subscribed: bool = False, 
+    unsubscribed: bool = False, 
+    error_message: str | None = None, 
     view_email: str | None = None
 ):
     my_companies = []
-
+    
     if view_email:
         my_companies = database.get_companies_by_user(view_email)
 
@@ -61,9 +61,9 @@ async def index(
         success_message = "Unsubscribed successfully."
 
     return templates.TemplateResponse("index.html", {
-        "request": request,
+        "request": request, 
         "companies": my_companies,
-        "view_email": view_email,
+        "view_email": view_email, 
         "success_message": success_message,
         "error_message": error_message
     })
@@ -71,22 +71,22 @@ async def index(
 
 @app.post("/add")
 async def add_company(
-    request: Request,
-    name: str = Form(...),
-    url: str = Form(...),
+    request: Request, 
+    name: str = Form(...), 
+    url: str = Form(...), 
     user_email: str = Form(...)
 ):
     user_companies = database.get_companies_by_user(user_email)
-    if len(user_companies) >= 5:
+    if len(user_companies) >= 5: 
         return RedirectResponse(
-            url=f"/?view_email={user_email}&error_message=✋ Limit Reached. Max 5 companies allowed.",
+            url=f"/?view_email={user_email}&error_message=✋ Limit Reached. Max 5 companies allowed.", 
             status_code=303
         )
 
     valid_keywords = ["career", "jobs", "job", "position", "work", "join", "team", "opportunities", "vacancy", "location", "about"]
     if not any(keyword in url.lower() for keyword in valid_keywords):
         return RedirectResponse(
-            url=f"/?view_email={user_email}&error_message=⚠️ Invalid URL. Link must be a Career page.",
+            url=f"/?view_email={user_email}&error_message=⚠️ Invalid URL. Link must be a Career page.", 
             status_code=303
         )
 
@@ -96,18 +96,21 @@ async def add_company(
 
 @app.post("/subscribe")
 async def subscribe(
-    background_tasks: BackgroundTasks,
+    background_tasks: BackgroundTasks, 
     email: str = Form(...),
-    departments: List[str] = Form(default=[])
+    departments: List[str] = Form(default=[]),
+    region: str = Form(default="Other") # <--- 1. קליטת האזור מהטופס
 ):
     interests_str = ",".join(departments)
-    database.add_user(email, interests_str)
-
-    print(f"👤 User {email} subscribed with interests: {interests_str}")
-
+    
+    # <--- 2. העברת האזור לדאטה בייס
+    database.add_user(email, interests_str, region)
+    
+    print(f"👤 User {email} subscribed. Region: {region}, Interests: {interests_str}")
+    
     # ✅ Trigger scraper in background
     background_tasks.add_task(start_scraper_task)
-
+    
     return RedirectResponse(url=f"/?subscribed=true&view_email={email}", status_code=303)
 
 
